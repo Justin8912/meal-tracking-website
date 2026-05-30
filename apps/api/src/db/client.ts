@@ -11,30 +11,53 @@ import * as schema from './schema.js';
  * Credentials come only from config, which reads them from process.env (S-1).
  */
 
-let pool: Pool | undefined;
-let db: NodePgDatabase<typeof schema> | undefined;
+export type Db = NodePgDatabase<typeof schema>;
+
+export interface DbHandle {
+  pool: Pool;
+  db: Db;
+  close: () => Promise<void>;
+}
+
+/**
+ * Create a fresh pooled Drizzle client for the given connection string. Used by
+ * the server factory so tests can inject an alternate (or unreachable) DB.
+ */
+export function createDbHandle(databaseUrl: string): DbHandle {
+  const pool = new Pool({ connectionString: databaseUrl });
+  const db = drizzle(pool, { schema });
+  return {
+    pool,
+    db,
+    close: async () => {
+      await pool.end();
+    },
+  };
+}
+
+// Process-wide singleton used by CLI tooling (migrations) and default startup.
+let handle: DbHandle | undefined;
+
+function getHandle(): DbHandle {
+  if (!handle) {
+    handle = createDbHandle(getConfig().databaseUrl);
+  }
+  return handle;
+}
 
 export function getPool(): Pool {
-  if (!pool) {
-    const config = getConfig();
-    pool = new Pool({ connectionString: config.databaseUrl });
-  }
-  return pool;
+  return getHandle().pool;
 }
 
-export function getDb(): NodePgDatabase<typeof schema> {
-  if (!db) {
-    db = drizzle(getPool(), { schema });
-  }
-  return db;
+export function getDb(): Db {
+  return getHandle().db;
 }
 
-/** Close the pool. Used on graceful shutdown. */
+/** Close the singleton pool. Used on graceful shutdown and in tests. */
 export async function closeDb(): Promise<void> {
-  if (pool) {
-    await pool.end();
-    pool = undefined;
-    db = undefined;
+  if (handle) {
+    await handle.close();
+    handle = undefined;
   }
 }
 
