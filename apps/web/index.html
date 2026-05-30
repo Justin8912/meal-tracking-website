@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Meal Tracking</title>
+    <!--
+      Runtime config (AD-5, F-3). env-config.js is rendered at container start by
+      docker-entrypoint.sh (envsubst over public/env-config.template.js) and defines
+      window._env_ = { API_BASE_URL }. It MUST load before the app bundle so the API
+      client sees window._env_ when it initializes. It is served no-cache so a stale
+      copy never pins an old API URL. No secret is ever placed here.
+    -->
+    <script src="/env-config.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
