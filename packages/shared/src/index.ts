@@ -9,6 +9,9 @@ export type {
   RecipeIngredient,
   RecipeInput,
   Recipe,
+  Tag,
+  RecipeDetailIngredient,
+  RecipeDetail,
 } from './types.js';
 export {
   workspaceSchema,
@@ -20,4 +23,9 @@ export {
   recipeIngredientSchema,
   recipeInputSchema,
   recipeSchema,
+  tagSchema,
+  tagListSchema,
+  tagInputSchema,
+  recipeDetailIngredientSchema,
+  recipeDetailSchema,
 } from './schemas.js';

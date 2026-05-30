@@ -1,38 +1,49 @@
 import type { FastifyInstance } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { recipeInputSchema, recipeSchema } from '@meal-tracking/shared';
-import type { Recipe } from '@meal-tracking/shared';
+import {
+  recipeInputSchema,
+  recipeSchema,
+  recipeDetailSchema,
+  mealTypeSchema,
+} from '@meal-tracking/shared';
+import type { Recipe, RecipeInput } from '@meal-tracking/shared';
 import type { Db } from '../db/client.js';
-import { recipes, type RecipeRow } from '../db/schema.js';
+import {
+  recipes,
+  recipeIngredients,
+  recipeTags,
+  ingredients,
+  type RecipeRow,
+} from '../db/schema.js';
 import { PersistenceError } from '../db/persist.js';
+import { upsertTagsByLabel } from './tags.js';
 import { resolveWorkspaceId } from '../workspace.js';
 
 /**
- * Thin recipe create/list path - the recipe-library walking skeleton (STEP-6).
- * Full CRUD, filter, and search arrive in Bundle 4 (AD-6); this proves the
- * web->api->postgres persistence round-trip only.
+ * Recipe routes (FR-1, FR-5, FR-6; AD-2, AD-6).
  *
- * POST validates the body against the shared Zod schema (S-3) and, on failure,
- * raises a 400 carrying the platform error envelope. The recipe row is inserted
- * workspace-scoped: the workspace id is resolved server-side via
- * resolveWorkspaceId() (platform AD-4) and set on the row through a fully
- * parameterized Drizzle insert (S-4); the committed row (not the request echo)
- * is returned so server-applied defaults/ids are visible. A direct insert is
- * used rather than the generic persist() helper because the recipes table has
- * nullable optional columns the helper's generic Omit type does not surface;
- * the workspace scoping and parameterization are preserved. A DB failure is
- * surfaced as a PersistenceError (5xx envelope), never a false success
- * (AC-1.5). The validated `ingredients` array is part of the contract but
- * persisting the recipe_ingredients join is deferred to Bundle 4 full CRUD.
+ * Bundle 1 shipped the thin create/list round-trip. Bundle 4 (STEP-29/31/33/35)
+ * extends it to full CRUD, tag application, server-side tag/meal-type filtering,
+ * and name search. All filters/search are parameterized Drizzle conditions
+ * (S-4) - user input is never concatenated into SQL.
  *
- * GET reads the workspace's recipes from the DB (not a hardcoded list) and
- * validates each row against the shared Recipe schema before sending.
+ * On any write failure a PersistenceError is thrown so the global handler emits
+ * the shared 5xx envelope rather than a false success (AC-1.5, AC-1.6). The
+ * write side (create/update of a recipe with its ingredients and tags) runs in
+ * a transaction so a partial write cannot leave the prior state half-replaced.
  */
 
 const recipeListSchema = z.array(recipeSchema);
 
-/** Map a persisted DB row to the shared Recipe response shape. */
+/** GET /recipes query params: optional text search and filters (AD-6). */
+const recipeQuerySchema = z.object({
+  q: z.string().optional(),
+  mealType: mealTypeSchema.optional(),
+  tag: z.string().optional(),
+});
+
+/** Map a persisted recipe DB row to the shared core Recipe response shape. */
 function toRecipe(row: RecipeRow): Recipe {
   return {
     id: row.id,
@@ -44,6 +55,94 @@ function toRecipe(row: RecipeRow): Recipe {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+/**
+ * Write a recipe's ingredient lines and tag links inside an existing
+ * transaction. Used by both create and update; on update the caller has already
+ * cleared the prior join rows so this fully replaces them. All inserts are
+ * parameterized (S-4).
+ */
+async function writeRecipeAssociations(
+  tx: Db,
+  workspaceId: string,
+  recipeId: string,
+  input: RecipeInput,
+): Promise<void> {
+  if (input.ingredients.length > 0) {
+    await tx.insert(recipeIngredients).values(
+      input.ingredients.map((line, index) => ({
+        recipeId,
+        ingredientId: line.ingredientId,
+        quantity: String(line.quantity),
+        unitCode: line.unitCode,
+        position: index,
+      })),
+    );
+  }
+
+  const labels = input.tags ?? [];
+  if (labels.length > 0) {
+    const tagRows = await upsertTagsByLabel(tx, workspaceId, labels);
+    if (tagRows.length > 0) {
+      await tx
+        .insert(recipeTags)
+        .values(tagRows.map((t) => ({ recipeId, tagId: t.id })))
+        .onConflictDoNothing();
+    }
+  }
+}
+
+/**
+ * Load a recipe (workspace-scoped) with its hydrated ingredient lines and tag
+ * labels. Returns undefined when the recipe does not exist in the workspace.
+ */
+async function loadRecipeDetail(
+  db: Db,
+  workspaceId: string,
+  id: string,
+): Promise<z.infer<typeof recipeDetailSchema> | undefined> {
+  const rows = await db
+    .select()
+    .from(recipes)
+    .where(and(eq(recipes.id, id), eq(recipes.workspaceId, workspaceId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) {
+    return undefined;
+  }
+
+  const lineRows = await db
+    .select({
+      ingredientId: recipeIngredients.ingredientId,
+      name: ingredients.name,
+      quantity: recipeIngredients.quantity,
+      unitCode: recipeIngredients.unitCode,
+    })
+    .from(recipeIngredients)
+    .innerJoin(ingredients, eq(recipeIngredients.ingredientId, ingredients.id))
+    .where(eq(recipeIngredients.recipeId, id))
+    .orderBy(asc(recipeIngredients.position));
+
+  const tagRows = await db
+    .select({ label: sql<string>`tags.label` })
+    .from(recipeTags)
+    .innerJoin(
+      sql`tags`,
+      sql`${recipeTags.tagId} = tags.id`,
+    )
+    .where(eq(recipeTags.recipeId, id));
+
+  return recipeDetailSchema.parse({
+    ...toRecipe(row),
+    ingredients: lineRows.map((l) => ({
+      ingredientId: l.ingredientId,
+      name: l.name,
+      quantity: Number(l.quantity),
+      unitCode: l.unitCode,
+    })),
+    tags: tagRows.map((t) => t.label),
+  });
 }
 
 export function registerRecipesRoutes(app: FastifyInstance, db: Db): void {
@@ -62,41 +161,206 @@ export function registerRecipesRoutes(app: FastifyInstance, db: Db): void {
     const input = parsed.data;
     const workspaceId = await resolveWorkspaceId(db);
 
-    let row: RecipeRow | undefined;
+    let createdId: string;
     try {
-      const inserted = await db
-        .insert(recipes)
-        .values({
-          workspaceId,
-          name: input.name,
-          mealType: input.mealType,
-          servings: input.servings,
-          notes: input.notes ?? null,
-          sourceLink: input.sourceLink ?? null,
-        })
-        .returning();
-      row = inserted[0];
+      createdId = await db.transaction(async (tx) => {
+        const inserted = await tx
+          .insert(recipes)
+          .values({
+            workspaceId,
+            name: input.name,
+            mealType: input.mealType,
+            servings: input.servings,
+            notes: input.notes ?? null,
+            sourceLink: input.sourceLink ?? null,
+          })
+          .returning({ id: recipes.id });
+        const id = inserted[0]?.id;
+        if (!id) {
+          throw new PersistenceError('Recipe insert returned no row');
+        }
+        await writeRecipeAssociations(tx, workspaceId, id, input);
+        return id;
+      });
     } catch (err) {
-      // Never swallow a write failure or report a false success (AC-1.5); the
-      // global handler serializes this into the shared 5xx error envelope.
+      if (err instanceof PersistenceError) throw err;
+      // Never swallow a write failure or report a false success (AC-1.5/1.6);
+      // the global handler serializes this into the shared 5xx envelope.
       throw new PersistenceError('Failed to persist recipe', { cause: err });
     }
-    if (!row) {
-      throw new PersistenceError('Recipe insert returned no row');
-    }
 
-    const body = recipeSchema.parse(toRecipe(row));
-    return reply.code(201).send(body);
+    const detail = await loadRecipeDetail(db, workspaceId, createdId);
+    if (!detail) {
+      throw new PersistenceError('Recipe vanished immediately after insert');
+    }
+    return reply.code(201).send(detail);
   });
 
-  app.get('/recipes', async (_request, reply) => {
+  app.get('/recipes', async (request, reply) => {
+    const parsedQuery = recipeQuerySchema.safeParse(request.query);
+    if (!parsedQuery.success) {
+      return reply.code(400).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message:
+            parsedQuery.error.issues[0]?.message ?? 'Invalid query parameters',
+        },
+      });
+    }
+
     const workspaceId = await resolveWorkspaceId(db);
+    const { q, mealType, tag } = parsedQuery.data;
+
+    // All conditions are parameterized Drizzle expressions (S-4) combined with
+    // AND; empty/whitespace params are ignored (AD-6).
+    const conditions = [eq(recipes.workspaceId, workspaceId)];
+
+    if (mealType) {
+      conditions.push(eq(recipes.mealType, mealType));
+    }
+
+    const trimmedQ = q?.trim();
+    if (trimmedQ) {
+      // Case-insensitive partial name match. The user value is bound as a
+      // parameter; only the surrounding % wildcards are literal (S-4).
+      conditions.push(ilike(recipes.name, `%${trimmedQ}%`));
+    }
+
+    const trimmedTag = tag?.trim();
+    if (trimmedTag) {
+      // Restrict to recipes that have a matching tag label. The tag value is a
+      // bound parameter (parameterized subquery), so SQL metacharacters in the
+      // label are treated literally, never as SQL (S-4).
+      const taggedRecipeIds = db
+        .select({ id: recipeTags.recipeId })
+        .from(recipeTags)
+        .innerJoin(sql`tags`, sql`${recipeTags.tagId} = tags.id`)
+        .where(
+          and(
+            sql`tags.workspace_id = ${workspaceId}`,
+            sql`tags.label = ${trimmedTag}`,
+          ),
+        );
+      conditions.push(inArray(recipes.id, taggedRecipeIds));
+    }
+
     const rows = await db
       .select()
       .from(recipes)
-      .where(eq(recipes.workspaceId, workspaceId));
+      .where(and(...conditions))
+      .orderBy(asc(recipes.createdAt));
 
     const body = recipeListSchema.parse(rows.map(toRecipe));
     return reply.code(200).send(body);
   });
+
+  app.get<{ Params: { id: string } }>('/recipes/:id', async (request, reply) => {
+    const workspaceId = await resolveWorkspaceId(db);
+    const detail = await loadRecipeDetail(db, workspaceId, request.params.id);
+    if (!detail) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: 'Recipe not found' },
+      });
+    }
+    return reply.code(200).send(detail);
+  });
+
+  app.put<{ Params: { id: string } }>('/recipes/:id', async (request, reply) => {
+    const parsed = recipeInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: parsed.error.issues[0]?.message ?? 'Invalid recipe payload',
+        },
+      });
+    }
+
+    const input = parsed.data;
+    const id = request.params.id;
+    const workspaceId = await resolveWorkspaceId(db);
+
+    // Confirm the recipe exists in this workspace before mutating (404 vs a
+    // silent no-op update).
+    const existing = await db
+      .select({ id: recipes.id })
+      .from(recipes)
+      .where(and(eq(recipes.id, id), eq(recipes.workspaceId, workspaceId)))
+      .limit(1);
+    if (!existing[0]) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: 'Recipe not found' },
+      });
+    }
+
+    try {
+      await db.transaction(async (tx) => {
+        const updated = await tx
+          .update(recipes)
+          .set({
+            name: input.name,
+            mealType: input.mealType,
+            servings: input.servings,
+            notes: input.notes ?? null,
+            sourceLink: input.sourceLink ?? null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(eq(recipes.id, id), eq(recipes.workspaceId, workspaceId)),
+          )
+          .returning({ id: recipes.id });
+        if (!updated[0]) {
+          throw new PersistenceError('Recipe update returned no row');
+        }
+        // Fully replace the association rows so the update is the source of
+        // truth for ingredients and tags.
+        await tx
+          .delete(recipeIngredients)
+          .where(eq(recipeIngredients.recipeId, id));
+        await tx.delete(recipeTags).where(eq(recipeTags.recipeId, id));
+        await writeRecipeAssociations(tx, workspaceId, id, input);
+      });
+    } catch (err) {
+      if (err instanceof PersistenceError) throw err;
+      throw new PersistenceError('Failed to update recipe', { cause: err });
+    }
+
+    const detail = await loadRecipeDetail(db, workspaceId, id);
+    if (!detail) {
+      throw new PersistenceError('Recipe vanished immediately after update');
+    }
+    return reply.code(200).send(detail);
+  });
+
+  app.delete<{ Params: { id: string } }>(
+    '/recipes/:id',
+    async (request, reply) => {
+      const workspaceId = await resolveWorkspaceId(db);
+      let deletedId: string | undefined;
+      try {
+        // recipe_ingredients and recipe_tags cascade on delete (0002). Any
+        // weekly-plan references are left as tombstones via ON DELETE SET NULL
+        // owned by the platform schema.
+        const deleted = await db
+          .delete(recipes)
+          .where(
+            and(
+              eq(recipes.id, request.params.id),
+              eq(recipes.workspaceId, workspaceId),
+            ),
+          )
+          .returning({ id: recipes.id });
+        deletedId = deleted[0]?.id;
+      } catch (err) {
+        throw new PersistenceError('Failed to delete recipe', { cause: err });
+      }
+
+      if (!deletedId) {
+        return reply.code(404).send({
+          error: { code: 'NOT_FOUND', message: 'Recipe not found' },
+        });
+      }
+      return reply.code(204).send();
+    },
+  );
 }

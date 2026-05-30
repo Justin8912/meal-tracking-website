@@ -98,6 +98,12 @@ export interface RecipeInput {
   notes?: string | null;
   sourceLink?: string | null;
   ingredients: RecipeIngredient[];
+  /**
+   * Optional tag labels applied to the recipe. Each label is upserted into the
+   * workspace's tags (UNIQUE(workspace_id,label), AD-2) and linked via
+   * recipe_tags. Omitted leaves tags unchanged on update / empty on create.
+   */
+  tags?: string[];
 }
 
 /**
@@ -116,6 +122,37 @@ export interface Recipe {
   createdAt: string;
   /** ISO 8601 timestamp. */
   updatedAt: string;
+}
+
+/**
+ * A workspace-scoped tag (AD-2). Labels are unique within a workspace and drive
+ * the library's tag filter (FR-5, AC-5.1).
+ */
+export interface Tag {
+  id: string;
+  label: string;
+}
+
+/**
+ * One hydrated ingredient line on a recipe-detail response: the join row's
+ * quantity/unit plus the linked ingredient's name for display. Computed grams
+ * and nutrition are deferred to the UI/engine in this slice (contracts.md).
+ */
+export interface RecipeDetailIngredient {
+  ingredientId: string;
+  name: string;
+  quantity: number;
+  unitCode: string;
+}
+
+/**
+ * A single recipe with its ingredients and tags hydrated (GET /recipes/:id and
+ * PUT response). Extends the core Recipe columns; computed nutrition is layered
+ * on by the UI via the shared engine in a later slice (contracts.md).
+ */
+export interface RecipeDetail extends Recipe {
+  ingredients: RecipeDetailIngredient[];
+  tags: string[];
 }
 
 /**
