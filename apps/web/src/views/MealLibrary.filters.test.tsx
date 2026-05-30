@@ -100,10 +100,12 @@ describe('MealLibrary filters', () => {
       target: { value: 'dinner' },
     });
 
+    // The narrowed list resolves (new query key -> refetch). Wait for the
+    // dinner-only result, then assert the breakfast recipe is gone.
     await waitFor(() => {
+      expect(screen.getByText('Quick Dinner')).toBeTruthy();
       expect(screen.queryByText('Big Breakfast')).toBeNull();
     });
-    expect(screen.getByText('Quick Dinner')).toBeTruthy();
     expect(recipeUrls.some((u) => u.includes('mealType=dinner'))).toBe(true);
   });
 
