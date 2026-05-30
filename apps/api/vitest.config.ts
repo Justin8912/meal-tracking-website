@@ -9,4 +9,11 @@ export default defineConfig({
   resolve: {
     conditions: ['development'],
   },
+  test: {
+    // Integration tests share one Postgres via the process-singleton pool
+    // (db/client.ts). Run test files serially so concurrent files do not
+    // interleave writes/DDL against the same tables. Within a file, tests
+    // already run in order.
+    fileParallelism: false,
+  },
 });
