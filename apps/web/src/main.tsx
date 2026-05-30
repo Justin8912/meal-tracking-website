@@ -1,7 +1,11 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { router } from './router.js';
+
+// One TanStack Query client for the app's server state (AD-5).
+const queryClient = new QueryClient();
 
 /**
  * React entry point. By the time this bundle executes, env-config.js has already
@@ -15,6 +19,8 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
   </StrictMode>,
 );
