@@ -19,3 +19,8 @@ build/
 
 # OS / editor
 .DS_Store
+
+# Local Docker verification artifacts (sandbox proxy CA + auth) - never commit
+ca-bundle.verify.pem
+npmrc.verify
+Dockerfile.verify

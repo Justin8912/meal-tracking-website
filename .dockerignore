@@ -1,0 +1,20 @@
+# Keep the Docker build context lean and ensure no host secrets or build artifacts
+# leak into image layers (S-1).
+**/node_modules
+**/dist
+**/build
+**/.git
+.git
+.gitignore
+
+# Never ship environment files / secrets into the build context.
+.env
+.env.*
+!.env.example
+
+# Logs and editor/OS cruft.
+**/*.log
+**/.DS_Store
+
+# Spec-driven workflow docs are not needed in any image.
+spec-driven/
