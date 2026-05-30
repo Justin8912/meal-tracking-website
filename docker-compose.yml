@@ -1,0 +1,58 @@
+# Walking-skeleton topology (AD-6): web (nginx) + api (Fastify) + postgres.
+#
+# Secrets (DB credentials) come ONLY from the runtime environment via env_file/
+# environment - never a build ARG (F-2, S-1). The real values live in a gitignored
+# .env (see .env.example for the variable names). postgres declares a pg_isready
+# healthcheck and the api waits for `service_healthy` so it never boots before the
+# database accepts connections.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Gate the api on real readiness, not just container start.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    # All config/secrets arrive at runtime here - never as build args.
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PORT: "3000"
+      HOST: 0.0.0.0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-3000}:3000"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    # The browser reaches the API directly; API_BASE_URL is injected into the SPA
+    # at container start (env-config.js). No secret is passed to the web service.
+    environment:
+      API_BASE_URL: ${API_BASE_URL}
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

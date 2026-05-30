@@ -24,3 +24,4 @@ build/
 ca-bundle.verify.pem
 npmrc.verify
 Dockerfile.verify
+docker-compose.verify.yml
