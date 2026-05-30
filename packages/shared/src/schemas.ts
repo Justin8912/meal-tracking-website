@@ -1,5 +1,15 @@
 import { z } from 'zod';
-import type { Workspace, Unit, ErrorEnvelope } from './types.js';
+import type {
+  Workspace,
+  Unit,
+  ErrorEnvelope,
+  MealType,
+  Micronutrient,
+  Nutrition,
+  RecipeIngredient,
+  RecipeInput,
+  Recipe,
+} from './types.js';
 
 /**
  * Runtime-validating Zod schemas matching the shared domain types. The API
@@ -25,3 +35,61 @@ export const errorEnvelopeSchema = z.object({
     message: z.string().min(1),
   }),
 }) satisfies z.ZodType<ErrorEnvelope>;
+
+/** The four meal-type slots; mirrors the recipes.meal_type CHECK in 0002. */
+export const mealTypeSchema = z.enum([
+  'breakfast',
+  'lunch',
+  'dinner',
+  'snack',
+]) satisfies z.ZodType<MealType>;
+
+export const micronutrientSchema = z.object({
+  amount: z.number(),
+  unit: z.string().min(1),
+}) satisfies z.ZodType<Micronutrient>;
+
+export const nutritionSchema = z.object({
+  calories: z.number(),
+  proteinG: z.number(),
+  carbsG: z.number(),
+  fatG: z.number(),
+  fiberG: z.number(),
+  micronutrients: z.record(z.string(), micronutrientSchema),
+}) satisfies z.ZodType<Nutrition>;
+
+/**
+ * A recipe ingredient line. Both quantity and unit are required (AD-4) and the
+ * quantity must be positive so a line can always resolve to grams.
+ */
+export const recipeIngredientSchema = z.object({
+  ingredientId: z.string().uuid(),
+  quantity: z.number().positive(),
+  unitCode: z.string().min(1),
+}) satisfies z.ZodType<RecipeIngredient>;
+
+/**
+ * POST /recipes request body. servings must be an integer >= 1 (matches the
+ * recipes.servings CHECK in 0002); meal_type is one of the four slots; at
+ * least one ingredient is required (AC-1.1).
+ */
+export const recipeInputSchema = z.object({
+  name: z.string().min(1),
+  mealType: mealTypeSchema,
+  servings: z.number().int().min(1),
+  notes: z.string().nullish(),
+  sourceLink: z.string().nullish(),
+  ingredients: z.array(recipeIngredientSchema).min(1),
+}) satisfies z.ZodType<RecipeInput>;
+
+/** A persisted recipe as returned by the API (core columns; contracts.md). */
+export const recipeSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  mealType: mealTypeSchema,
+  servings: z.number().int().min(1),
+  notes: z.string().nullable(),
+  sourceLink: z.string().nullable(),
+  createdAt: z.string().min(1),
+  updatedAt: z.string().min(1),
+}) satisfies z.ZodType<Recipe>;
