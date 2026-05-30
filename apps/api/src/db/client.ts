@@ -1,5 +1,7 @@
-import { Pool } from 'pg';
+import pg from 'pg';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
+
+const { Pool } = pg;
 import { getConfig } from '../config/env.js';
 import * as schema from './schema.js';
 
@@ -14,7 +16,7 @@ import * as schema from './schema.js';
 export type Db = NodePgDatabase<typeof schema>;
 
 export interface DbHandle {
-  pool: Pool;
+  pool: pg.Pool;
   db: Db;
   close: () => Promise<void>;
 }
@@ -45,7 +47,7 @@ function getHandle(): DbHandle {
   return handle;
 }
 
-export function getPool(): Pool {
+export function getPool(): pg.Pool {
   return getHandle().pool;
 }
 
