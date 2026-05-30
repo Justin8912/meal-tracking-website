@@ -1,0 +1,10 @@
+{
+  "name": "@meal-tracking/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Frontend SPA stub. Implemented in Bundle 2.",
+  "dependencies": {
+    "@meal-tracking/shared": "0.1.0"
+  }
+}

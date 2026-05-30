@@ -1,3 +1,21 @@
 
 # Spec-driven workflow session files (ephemeral)
 spec-driven/.sessions/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Environment / secrets (S-1)
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# OS / editor
+.DS_Store
