@@ -80,6 +80,17 @@ const customIngredientInputSchema = z
     { message: 'a custom ingredient needs at least one nutrition fact' },
   );
 
+/**
+ * POST /ingredients/usda/:fdcId body (AD-4). The user confirms/overrides the
+ * gram-equivalents at entry: `gramWeightPerQty` (grams per `qty` unit) and a map
+ * of volume unit -> grams. Both optional; an ingredient lacking density data is
+ * flagged downstream via completeness rather than silently estimated (F-4).
+ */
+const usdaSnapshotInputSchema = z.object({
+  gramWeightPerQty: z.number().positive().optional(),
+  unitGramEquivalents: z.record(z.string(), z.number().positive()).optional(),
+});
+
 /** A saved ingredient (custom or USDA snapshot) as returned by the API. */
 const ingredientResponseSchema = z.object({
   id: z.string().uuid(),
@@ -198,6 +209,78 @@ export function registerIngredientsRoutes(
 
       const body = normalizedFoodSchema.parse(food);
       return reply.code(200).send(body);
+    },
+  );
+
+  // FR-2/AD-4: add a USDA food to the workspace by snapshotting its per-100g
+  // nutrition into an owned source='usda' ingredient. The snapshot is
+  // independent of usda_food_cache (a pure accelerator) so cache eviction never
+  // rewrites historical recipes (F-11). Confirmed gram-equivalents persist for
+  // unit conversion (AC-4.5).
+  app.post<{ Params: { fdcId: string } }>(
+    '/ingredients/usda/:fdcId',
+    async (request, reply) => {
+      const parsedBody = usdaSnapshotInputSchema.safeParse(request.body ?? {});
+      if (!parsedBody.success) {
+        return reply.code(400).send({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message:
+              parsedBody.error.issues[0]?.message ?? 'Invalid snapshot payload',
+          },
+        });
+      }
+
+      const { fdcId } = request.params;
+      let food: NormalizedFood;
+      try {
+        food = await usda.getFood(fdcId);
+      } catch (err) {
+        if (err instanceof UsdaError) {
+          return sendUsdaError(reply, err);
+        }
+        throw err;
+      }
+
+      const p = food.per100g;
+      const workspaceId = await resolveWorkspaceId(_db);
+      let row: IngredientRow | undefined;
+      try {
+        // Snapshot per-100g macros; absent USDA nutrients stay NULL (unknown,
+        // never zero - S-6). Parameterized Drizzle insert (S-4).
+        const inserted = await _db
+          .insert(ingredients)
+          .values({
+            workspaceId,
+            name: food.description,
+            source: 'usda',
+            fdcId: food.fdcId,
+            referenceGrams: '100',
+            gramWeightPerQty:
+              parsedBody.data.gramWeightPerQty !== undefined
+                ? String(parsedBody.data.gramWeightPerQty)
+                : null,
+            unitGramEquivalents: parsedBody.data.unitGramEquivalents ?? {},
+            calories: p.calories !== undefined ? String(p.calories) : null,
+            proteinG: p.proteinG !== undefined ? String(p.proteinG) : null,
+            carbsG: p.carbsG !== undefined ? String(p.carbsG) : null,
+            fatG: p.fatG !== undefined ? String(p.fatG) : null,
+            fiberG: p.fiberG !== undefined ? String(p.fiberG) : null,
+            micronutrients: p.micronutrients,
+          })
+          .returning();
+        row = inserted[0];
+      } catch (err) {
+        throw new PersistenceError('Failed to snapshot USDA ingredient', {
+          cause: err,
+        });
+      }
+      if (!row) {
+        throw new PersistenceError('USDA snapshot insert returned no row');
+      }
+
+      const body = ingredientResponseSchema.parse(toIngredientResponse(row));
+      return reply.code(201).send(body);
     },
   );
 
