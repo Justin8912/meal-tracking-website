@@ -34,8 +34,17 @@ export async function buildServer(
   const app = Fastify({
     logger: {
       level: options.logLevel ?? 'info',
-      // pino emits structured JSON (NFR-4). Never log secret values (S-1).
-      redact: ['req.headers.authorization', 'databaseUrl', 'DATABASE_URL'],
+      // pino emits structured JSON (NFR-4). Never log secret values (S-1, S-2):
+      // the USDA api_key is redacted alongside DB credentials so it cannot leak
+      // through request/error logging (AC-2.4).
+      redact: [
+        'req.headers.authorization',
+        'databaseUrl',
+        'DATABASE_URL',
+        'usdaApiKey',
+        'USDA_API_KEY',
+        'api_key',
+      ],
     },
   });
 

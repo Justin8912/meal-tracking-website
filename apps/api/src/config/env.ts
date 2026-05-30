@@ -23,6 +23,14 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
+  // USDA FoodData Central API key. Read ONLY from the runtime environment
+  // (S-2): it is never bundled client-side or baked into a build ARG. Optional
+  // so the server still boots without it; the USDA proxy degrades to
+  // cache/custom entry when it is absent (AD-3, NFR-5).
+  USDA_API_KEY: z.string().min(1).optional(),
+  // Override for the USDA base URL (defaults to production). Lets tests point
+  // the client at a stub server without touching the real upstream.
+  USDA_BASE_URL: z.string().url().default('https://api.nal.usda.gov/fdc/v1'),
 });
 
 export interface AppConfig {
@@ -30,6 +38,10 @@ export interface AppConfig {
   port: number;
   host: string;
   logLevel: string;
+  /** USDA API key, or undefined when not configured (S-2). */
+  usdaApiKey: string | undefined;
+  /** USDA FoodData Central base URL. */
+  usdaBaseUrl: string;
 }
 
 /**
@@ -59,6 +71,8 @@ export function loadConfig(
     port: parsed.data.PORT,
     host: parsed.data.HOST,
     logLevel: parsed.data.LOG_LEVEL,
+    usdaApiKey: parsed.data.USDA_API_KEY,
+    usdaBaseUrl: parsed.data.USDA_BASE_URL,
   };
 }
 
