@@ -1,10 +1,20 @@
 /**
  * Public barrel for the pure, dependency-free nutrition engine (AD-1, S-1).
  *
- * The engine logic (per-100g scaling, full-precision accumulation, an
- * absolute-mass micronutrient union, display-only rounding, and a completeness
- * descriptor) lands in Bundle 2 via TDD. This bundle scaffolds the package so
- * the workspace resolves it with zero runtime dependencies; nothing is exported
- * yet.
+ * The engine performs per-`referenceGrams` scaling, full-precision macro and
+ * absolute-mass micronutrient accumulation, a completeness descriptor for
+ * missing data (never zero-filled — F-5/S-6), and display-only rounding. It is
+ * imported by both the API (authoritative totals) and the web client (live
+ * recalc, AC-4.4) with zero runtime dependencies.
  */
-export {};
+export { toGrams } from './units.js';
+export type {
+  Nutrition,
+  Micronutrient,
+  NutritionIngredient,
+  NutritionLine,
+  GramResult,
+  CompletenessGap,
+  Completeness,
+  RecipeNutrition,
+} from './types.js';
