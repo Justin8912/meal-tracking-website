@@ -115,7 +115,7 @@ describe('computeRecipeNutrition - micronutrient union', () => {
       },
     ];
     const { total } = computeRecipeNutrition(mixedUnits, 1);
-    expect(total.micronutrients.folate.unit).toBe('mcg');
-    expect(total.micronutrients.sodium.unit).toBe('mg');
+    expect(total.micronutrients.folate?.unit).toBe('mcg');
+    expect(total.micronutrients.sodium?.unit).toBe('mg');
   });
 });
