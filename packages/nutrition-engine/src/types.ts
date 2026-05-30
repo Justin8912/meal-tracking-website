@@ -86,3 +86,19 @@ export interface RecipeNutrition {
   perServing: Nutrition;
   completeness: Completeness;
 }
+
+/**
+ * A display-rounded nutrition profile (STEP-17, S-6). Structurally identical to
+ * `Nutrition`, but its numbers are the output of the single rounding boundary
+ * (`formatNutrition`). It is a distinct type so callers cannot accidentally
+ * feed rounded values back into the full-precision engine and reintroduce
+ * compounding error (F-5).
+ */
+export interface FormattedNutrition {
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  fiberG: number;
+  micronutrients: Record<string, Micronutrient>;
+}

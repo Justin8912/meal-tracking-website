@@ -9,6 +9,7 @@
  */
 export { toGrams } from './units.js';
 export { computeRecipeNutrition } from './compute.js';
+export { formatNutrition } from './format.js';
 export type {
   Nutrition,
   Micronutrient,
@@ -18,4 +19,5 @@ export type {
   CompletenessGap,
   Completeness,
   RecipeNutrition,
+  FormattedNutrition,
 } from './types.js';
