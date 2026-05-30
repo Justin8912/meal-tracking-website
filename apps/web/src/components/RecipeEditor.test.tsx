@@ -81,19 +81,19 @@ describe('RecipeEditor live nutrition', () => {
 
     renderWithClient(<RecipeEditor initialIngredients={lines} initialServings={1} />);
 
-    const panel = screen.getByLabelText(/per-serving nutrition/i);
     const at1 = expectedPerServingCalories(lines, 1);
     const at2 = expectedPerServingCalories(lines, 2);
     // Sanity: the two servings values genuinely differ (500 vs 250).
     expect(at1).toBe(500);
     expect(at2).toBe(250);
 
-    expect(within(panel).getByText(new RegExp(`${at1}`))).toBeTruthy();
+    const caloriesCell = screen.getByLabelText(/per-serving calories/i);
+    expect(caloriesCell.textContent).toBe(String(at1));
 
     const servingsInput = screen.getByLabelText(/servings/i);
     fireEvent.change(servingsInput, { target: { value: '2' } });
 
-    expect(within(panel).getByText(new RegExp(`${at2}`))).toBeTruthy();
+    expect(caloriesCell.textContent).toBe(String(at2));
   });
 
   it('shows an incomplete indicator (not 0) when an ingredient is missing conversion data', () => {
@@ -110,13 +110,14 @@ describe('RecipeEditor live nutrition', () => {
       <RecipeEditor initialIngredients={[complete, missing]} initialServings={1} />,
     );
 
-    // The completeness indicator is present.
-    expect(screen.getByText(/incomplete/i)).toBeTruthy();
-
-    // The displayed total reflects only the resolvable line (200 kcal), NOT 0
-    // and NOT the full 500 — the missing line is excluded, never zero-filled.
+    // The panel-level completeness indicator is present (explains the exclusion).
     const panel = screen.getByLabelText(/per-serving nutrition/i);
-    expect(within(panel).getByText(/200/)).toBeTruthy();
-    expect(within(panel).queryByText(/^0$/)).toBeNull();
+    expect(within(panel).getByRole('note').textContent).toMatch(/incomplete/i);
+
+    // The displayed per-serving calories reflect only the resolvable line
+    // (200 kcal), NOT 0 and NOT the full 500 — the missing line is excluded,
+    // never zero-filled (S-6).
+    const caloriesCell = screen.getByLabelText(/per-serving calories/i);
+    expect(caloriesCell.textContent).toBe('200');
   });
 });

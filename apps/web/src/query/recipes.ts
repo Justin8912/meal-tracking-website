@@ -1,5 +1,11 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import type { Recipe } from '@meal-tracking/shared';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult,
+  type UseQueryResult,
+} from '@tanstack/react-query';
+import type { Recipe, RecipeInput } from '@meal-tracking/shared';
 import { apiFetch } from '../api/client.js';
 
 /**
@@ -49,5 +55,48 @@ export function useRecipes(
   return useQuery({
     queryKey: recipesQueryKey(filters),
     queryFn: () => fetchRecipes(filters),
+  });
+}
+
+/**
+ * Persist a recipe. A `recipeId` routes to PUT /recipes/:id (edit), otherwise
+ * POST /recipes (create). The body is the shared RecipeInput contract (S-3).
+ */
+async function saveRecipe(
+  input: RecipeInput,
+  recipeId?: string,
+): Promise<Recipe> {
+  const path = recipeId
+    ? `/api/v1/recipes/${recipeId}`
+    : '/api/v1/recipes';
+  return apiFetch<Recipe>(path, {
+    method: recipeId ? 'PUT' : 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+/** Arguments accepted by the save mutation (create vs edit by `recipeId`). */
+export interface SaveRecipeArgs {
+  input: RecipeInput;
+  recipeId?: string;
+}
+
+/**
+ * Mutation hook to create/update a recipe (AD-5, F-2). On success it
+ * invalidates every `['recipes', ...]` query so the library refetches and the
+ * new/edited recipe appears (AC-1.1) regardless of the active filter/search.
+ */
+export function useSaveRecipe(): UseMutationResult<
+  Recipe,
+  Error,
+  SaveRecipeArgs
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ input, recipeId }: SaveRecipeArgs) =>
+      saveRecipe(input, recipeId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['recipes'] });
+    },
   });
 }
