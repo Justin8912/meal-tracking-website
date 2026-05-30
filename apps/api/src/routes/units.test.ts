@@ -62,8 +62,8 @@ describeDb('GET /api/v1/units (integration)', () => {
 
     // Order-independent comparison of the full seeded set.
     const byCode = Object.fromEntries(
-      (res.body as Array<{ code: string }>).map((u) => [u.code, u]),
-    );
+      (res.body as Array<z.infer<typeof unitSchema>>).map((u) => [u.code, u]),
+    ) as Record<string, z.infer<typeof unitSchema>>;
     for (const expected of EXPECTED_UNITS) {
       expect(byCode[expected.code]).toEqual(expected);
     }

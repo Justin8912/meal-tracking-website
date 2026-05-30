@@ -6,6 +6,7 @@ import type { ErrorEnvelope } from '@meal-tracking/shared';
 import { getConfig, type AppConfig } from './config/env.js';
 import { createDbHandle, type DbHandle } from './db/client.js';
 import { registerHealthRoute } from './routes/health.js';
+import { registerUnitsRoute } from './routes/units.js';
 
 /**
  * API base path for feature resources (references/contracts.md). The health
@@ -69,6 +70,14 @@ export async function buildServer(
   });
 
   registerHealthRoute(app, handle.db);
+
+  // Feature resources live under the shared API base path (contracts.md).
+  await app.register(
+    async (api) => {
+      registerUnitsRoute(api, handle.db);
+    },
+    { prefix: API_BASE_PATH },
+  );
 
   return app;
 }
