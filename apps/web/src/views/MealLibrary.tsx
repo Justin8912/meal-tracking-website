@@ -3,6 +3,7 @@ import type { MealType } from '@meal-tracking/shared';
 import { useRecipes } from '../query/recipes.js';
 import { useTags } from '../query/tags.js';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
+import { RecipeEditor } from '../components/RecipeEditor.js';
 
 /**
  * Meal Library view (AD-5, FR-1/FR-5).
@@ -21,6 +22,7 @@ export function MealLibrary(): JSX.Element {
   const [mealType, setMealType] = useState('');
   const [tag, setTag] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [editorOpen, setEditorOpen] = useState(false);
   // Debounce the search term so a TanStack Query key only changes after the
   // user pauses (AC-6.1) rather than firing a request per keystroke (AD-5).
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
@@ -39,6 +41,20 @@ export function MealLibrary(): JSX.Element {
   return (
     <section aria-labelledby="meal-library-heading">
       <h1 id="meal-library-heading">Meal Library</h1>
+
+      <button
+        type="button"
+        onClick={() => setEditorOpen((open) => !open)}
+        aria-expanded={editorOpen}
+      >
+        {editorOpen ? 'Close editor' : 'Add recipe'}
+      </button>
+
+      {editorOpen ? (
+        // On save the mutation invalidates ['recipes'], so closing the editor
+        // returns to a freshly-refetched list with the new recipe (AC-1.1).
+        <RecipeEditor onSaved={() => setEditorOpen(false)} />
+      ) : null}
 
       <div className="meal-library__filters" role="search">
         <label>
