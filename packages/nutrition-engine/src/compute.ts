@@ -12,11 +12,26 @@
  */
 import { toGrams } from './units.js';
 import type {
+  CompletenessGap,
   Micronutrient,
   Nutrition,
   NutritionLine,
   RecipeNutrition,
 } from './types.js';
+
+/**
+ * Reason recorded when `toGrams` cannot resolve grams for a line. The line is
+ * EXCLUDED from both macro and micronutrient sums (its contribution genuinely
+ * cannot be computed) and surfaced via completeness, never zero-filled (F-5).
+ */
+const REASON_UNRESOLVED_GRAMS = 'unresolved-grams';
+/**
+ * Reason recorded when a line resolves to grams but carries an empty
+ * micronutrient map. Its macros (and any micros it does have) STILL contribute
+ * to the sums; we simply never fabricate the absent micronutrients (S-6). The
+ * recipe is flagged incomplete so the UI can surface the gap.
+ */
+const REASON_MISSING_MICRONUTRIENTS = 'missing-micronutrients';
 
 /** A zeroed macro accumulator with an empty micronutrient union. */
 function emptyTotal(): Nutrition {
@@ -103,27 +118,47 @@ function divideMacros(n: Nutrition, divisor: number): Nutrition {
  * Compute total and per-serving nutrition for a recipe.
  *
  * STEP-11 establishes the macro path; the micronutrient union (STEP-13) and
- * completeness descriptor (STEP-15) extend this function.
+ * completeness descriptor (STEP-15) extend this function. Completeness has two
+ * distinct gaps: an unresolved-grams line is excluded from sums; a line with an
+ * empty micronutrient map still contributes its macros but is flagged
+ * missing-micronutrients. Absent data is never zero-filled (F-5, S-6).
  */
 export function computeRecipeNutrition(
   lines: NutritionLine[],
   servings: number,
 ): RecipeNutrition {
   const total = emptyTotal();
+  const missing: CompletenessGap[] = [];
 
   for (const line of lines) {
     const gramResult = toGrams(line.quantity, line.unitCode, line.ingredient);
     if (!gramResult.resolved) {
-      // Unresolved grams are recorded in completeness (STEP-15), never summed.
+      // Grams unresolved: the line's contribution cannot be computed, so it is
+      // excluded from BOTH sums and recorded; never substitute a default
+      // weight (F-5, S-6). The unit is surfaced via the toGrams reason.
+      missing.push({
+        ingredientId: line.ingredient.id,
+        reason: `${REASON_UNRESOLVED_GRAMS}: ${gramResult.reason}`,
+      });
       continue;
     }
     const factor = gramResult.grams / line.ingredient.referenceGrams;
+    // Macros (and any present micronutrients) always contribute once grams
+    // resolve, even if the micronutrient map is empty.
     addMacros(total, scaleMacros(line.ingredient.nutrition, factor));
     addMicronutrients(
       total.micronutrients,
       line.ingredient.nutrition.micronutrients,
       factor,
     );
+    // An empty micronutrient map is a partial-data gap: macros are counted but
+    // the absent micronutrients are never zero-filled, so flag the recipe.
+    if (Object.keys(line.ingredient.nutrition.micronutrients).length === 0) {
+      missing.push({
+        ingredientId: line.ingredient.id,
+        reason: REASON_MISSING_MICRONUTRIENTS,
+      });
+    }
   }
 
   const divisor = Math.max(servings, 1);
@@ -136,6 +171,6 @@ export function computeRecipeNutrition(
   return {
     total,
     perServing,
-    completeness: { complete: true, missing: [] },
+    completeness: { complete: missing.length === 0, missing },
   };
 }
