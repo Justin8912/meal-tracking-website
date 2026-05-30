@@ -64,3 +64,6 @@ client asset, image layer, or build ARG.
 - Verification: typecheck + tests green; `vite build` clean; full `docker compose up`
   reached `/healthz` 200 with runtime-injected env-config.js and no secrets anywhere.
 - Next: Bundle 2 complete.
+
+### 2026-05-30 — production-correctness fix: compile shared+api to JS, drop tsx from runtime
+- Converted `@meal-tracking/shared` and `@meal-tracking/api` to compiled-JS packages (tsc emit to dist/ via tsconfig.build.json); shared exports now expose compiled `dist/index.js`/types with a `development` condition resolving to TS source for in-repo dev/typecheck/Vitest; API `start`/`migrate` run `node dist/server.js`/`node dist/db/migrate.js`; tsx demoted to a devDependency (no longer a runtime dep); Dockerfile is now multi-stage build->compile->prune with a tsx-free runtime image; entrypoint runs compiled JS. Verified typecheck + tests green (shared 10, api 4+8 skip, web 5), `docker compose up` reached `/healthz` 200 with PID 1 = `node dist/server.js` and no tsx in the image (build used the gitignored *.verify proxy/CA + npmrc-secret overlay; token confirmed absent from image layers).
