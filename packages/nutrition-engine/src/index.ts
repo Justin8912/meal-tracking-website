@@ -8,6 +8,7 @@
  * recalc, AC-4.4) with zero runtime dependencies.
  */
 export { toGrams } from './units.js';
+export { computeRecipeNutrition } from './compute.js';
 export type {
   Nutrition,
   Micronutrient,
