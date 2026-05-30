@@ -8,6 +8,9 @@ import { createDbHandle, type DbHandle } from './db/client.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerUnitsRoute } from './routes/units.js';
 import { registerRecipesRoutes } from './routes/recipes.js';
+import { registerIngredientsRoutes } from './routes/ingredients.js';
+import { createUsdaClient, type UsdaClient } from './usda/client.js';
+import { createCachedUsdaClient } from './usda/cache.js';
 
 /**
  * API base path for feature resources (references/contracts.md). The health
@@ -20,6 +23,16 @@ export interface BuildServerOptions {
   databaseUrl: string;
   /** pino log level. Defaults to 'info'. */
   logLevel?: string;
+  /** USDA api_key from runtime env (S-2). Optional; proxy degrades without it. */
+  usdaApiKey?: string;
+  /** USDA base URL override (defaults to the production FDC base). */
+  usdaBaseUrl?: string;
+  /**
+   * Pre-built USDA client. Tests inject a stub here so the proxy routes never
+   * hit the real USDA API or require the cache. When omitted, a cache-aside
+   * client is built from the config above.
+   */
+  usdaClient?: UsdaClient;
 }
 
 /**
@@ -81,11 +94,25 @@ export async function buildServer(
 
   registerHealthRoute(app, handle.db);
 
+  // USDA proxy client: a stub when injected (tests), otherwise a cache-aside
+  // client over the raw USDA client built from runtime config (S-2, AD-3). The
+  // key lives only in config and is never exposed to routes or responses.
+  const usdaClient: UsdaClient =
+    options.usdaClient ??
+    createCachedUsdaClient(
+      handle.db,
+      createUsdaClient({
+        usdaApiKey: options.usdaApiKey,
+        usdaBaseUrl: options.usdaBaseUrl ?? 'https://api.nal.usda.gov/fdc/v1',
+      }),
+    );
+
   // Feature resources live under the shared API base path (contracts.md).
   await app.register(
     async (api) => {
       registerUnitsRoute(api, handle.db);
       registerRecipesRoutes(api, handle.db);
+      registerIngredientsRoutes(api, handle.db, usdaClient);
     },
     { prefix: API_BASE_PATH },
   );
@@ -101,6 +128,8 @@ async function start(): Promise<void> {
   const app = await buildServer({
     databaseUrl: config.databaseUrl,
     logLevel: config.logLevel,
+    usdaApiKey: config.usdaApiKey,
+    usdaBaseUrl: config.usdaBaseUrl,
   });
 
   const shutdown = async (signal: string): Promise<void> => {
