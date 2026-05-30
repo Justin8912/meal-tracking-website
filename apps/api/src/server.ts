@@ -7,6 +7,7 @@ import { getConfig, type AppConfig } from './config/env.js';
 import { createDbHandle, type DbHandle } from './db/client.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerUnitsRoute } from './routes/units.js';
+import { registerRecipesRoutes } from './routes/recipes.js';
 
 /**
  * API base path for feature resources (references/contracts.md). The health
@@ -75,6 +76,7 @@ export async function buildServer(
   await app.register(
     async (api) => {
       registerUnitsRoute(api, handle.db);
+      registerRecipesRoutes(api, handle.db);
     },
     { prefix: API_BASE_PATH },
   );
