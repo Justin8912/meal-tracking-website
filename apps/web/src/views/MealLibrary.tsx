@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { MealType } from '@meal-tracking/shared';
 import { useRecipes } from '../query/recipes.js';
 import { useTags } from '../query/tags.js';
+import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 
 /**
  * Meal Library view (AD-5, FR-1/FR-5).
@@ -19,21 +20,37 @@ const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 export function MealLibrary(): JSX.Element {
   const [mealType, setMealType] = useState('');
   const [tag, setTag] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  // Debounce the search term so a TanStack Query key only changes after the
+  // user pauses (AC-6.1) rather than firing a request per keystroke (AD-5).
+  const debouncedSearch = useDebouncedValue(searchTerm, 300);
 
   const filters = {
+    q: debouncedSearch.trim() || undefined,
     mealType: mealType || undefined,
     tag: tag || undefined,
   };
   const { data: recipes, isLoading, isError, error } = useRecipes(filters);
   const tagsQuery = useTags();
 
-  const hasActiveFilter = mealType !== '' || tag !== '';
+  const hasActiveFilter =
+    mealType !== '' || tag !== '' || debouncedSearch.trim() !== '';
 
   return (
     <section aria-labelledby="meal-library-heading">
       <h1 id="meal-library-heading">Meal Library</h1>
 
       <div className="meal-library__filters" role="search">
+        <label>
+          Search recipes
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by name"
+          />
+        </label>
+
         <label>
           Meal type
           <select
@@ -69,7 +86,9 @@ export function MealLibrary(): JSX.Element {
           Could not load recipes: {error?.message ?? 'unknown error'}
         </p>
       ) : !recipes || recipes.length === 0 ? (
-        hasActiveFilter ? (
+        debouncedSearch.trim() !== '' ? (
+          <p>No recipes found.</p>
+        ) : hasActiveFilter ? (
           <p>No recipes match the selected filters.</p>
         ) : (
           <p>No recipes yet. Add your first recipe to get started.</p>
