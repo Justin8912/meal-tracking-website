@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { and, asc, eq, ilike, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   recipeInputSchema,
@@ -14,6 +14,7 @@ import {
   recipeIngredients,
   recipeTags,
   ingredients,
+  tags,
   type RecipeRow,
 } from '../db/schema.js';
 import { PersistenceError } from '../db/persist.js';
@@ -36,11 +37,25 @@ import { resolveWorkspaceId } from '../workspace.js';
 
 const recipeListSchema = z.array(recipeSchema);
 
+/**
+ * Coerce an absent or blank query param to undefined so empty filters are
+ * ignored rather than treated as a value (AD-6). Non-string inputs (e.g.
+ * repeated params parsed to arrays) are rejected by the field schema.
+ */
+const blankToUndefined = z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+  z.string().optional(),
+);
+
 /** GET /recipes query params: optional text search and filters (AD-6). */
 const recipeQuerySchema = z.object({
-  q: z.string().optional(),
-  mealType: mealTypeSchema.optional(),
-  tag: z.string().optional(),
+  q: blankToUndefined,
+  // Empty mealType is ignored; a non-empty value must be one of the four slots.
+  mealType: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+    mealTypeSchema.optional(),
+  ),
+  tag: blankToUndefined,
 });
 
 /** Map a persisted recipe DB row to the shared core Recipe response shape. */
@@ -125,12 +140,9 @@ async function loadRecipeDetail(
     .orderBy(asc(recipeIngredients.position));
 
   const tagRows = await db
-    .select({ label: sql<string>`tags.label` })
+    .select({ label: tags.label })
     .from(recipeTags)
-    .innerJoin(
-      sql`tags`,
-      sql`${recipeTags.tagId} = tags.id`,
-    )
+    .innerJoin(tags, eq(recipeTags.tagId, tags.id))
     .where(eq(recipeTags.recipeId, id));
 
   return recipeDetailSchema.parse({
@@ -234,12 +246,9 @@ export function registerRecipesRoutes(app: FastifyInstance, db: Db): void {
       const taggedRecipeIds = db
         .select({ id: recipeTags.recipeId })
         .from(recipeTags)
-        .innerJoin(sql`tags`, sql`${recipeTags.tagId} = tags.id`)
+        .innerJoin(tags, eq(recipeTags.tagId, tags.id))
         .where(
-          and(
-            sql`tags.workspace_id = ${workspaceId}`,
-            sql`tags.label = ${trimmedTag}`,
-          ),
+          and(eq(tags.workspaceId, workspaceId), eq(tags.label, trimmedTag)),
         );
       conditions.push(inArray(recipes.id, taggedRecipeIds));
     }
