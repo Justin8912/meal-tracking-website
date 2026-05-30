@@ -1,7 +1,12 @@
 import type { FastifyInstance } from 'fastify';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { micronutrientSchema } from '@meal-tracking/shared';
+import type { Micronutrient } from '@meal-tracking/shared';
 import type { Db } from '../db/client.js';
+import { ingredients, type IngredientRow } from '../db/schema.js';
+import { PersistenceError } from '../db/persist.js';
+import { resolveWorkspaceId } from '../workspace.js';
 import { UsdaError, type UsdaClient } from '../usda/client.js';
 import type { NormalizedFood } from '../usda/mapper.js';
 
@@ -40,6 +45,95 @@ const searchResultsSchema = z.array(normalizedFoodSchema);
 const searchQuerySchema = z.object({
   q: z.string().min(1, 'q is required'),
 });
+
+const micronutrientMapSchema = z.record(z.string(), micronutrientSchema);
+
+/**
+ * POST /ingredients body for a custom ingredient (FR-3). Macros are individually
+ * optional (a user may know only some facts; absent = unknown, never zero -
+ * S-6), but at least one nutrition fact MUST be present so the ingredient has a
+ * usable basis. Nutrition is on a reference_grams basis (default 100), uniform
+ * with USDA snapshots so the engine treats both identically (AC-3.2).
+ */
+const customIngredientInputSchema = z
+  .object({
+    name: z.string().min(1, 'name is required'),
+    referenceGrams: z.number().positive().default(100),
+    calories: z.number().nonnegative().optional(),
+    proteinG: z.number().nonnegative().optional(),
+    carbsG: z.number().nonnegative().optional(),
+    fatG: z.number().nonnegative().optional(),
+    fiberG: z.number().nonnegative().optional(),
+    micronutrients: micronutrientMapSchema.optional(),
+    gramWeightPerQty: z.number().positive().optional(),
+    unitGramEquivalents: z.record(z.string(), z.number().positive()).optional(),
+  })
+  .refine(
+    (v) =>
+      v.calories !== undefined ||
+      v.proteinG !== undefined ||
+      v.carbsG !== undefined ||
+      v.fatG !== undefined ||
+      v.fiberG !== undefined ||
+      (v.micronutrients !== undefined &&
+        Object.keys(v.micronutrients).length > 0),
+    { message: 'a custom ingredient needs at least one nutrition fact' },
+  );
+
+/** A saved ingredient (custom or USDA snapshot) as returned by the API. */
+const ingredientResponseSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  source: z.enum(['usda', 'custom']),
+  fdcId: z.string().nullable(),
+  referenceGrams: z.number().positive(),
+  gramWeightPerQty: z.number().nullable(),
+  unitGramEquivalents: z.record(z.string(), z.number()),
+  nutrition: per100gSchema,
+  createdAt: z.string().min(1),
+  updatedAt: z.string().min(1),
+});
+
+const ingredientListSchema = z.array(ingredientResponseSchema);
+
+/** Parse a nullable numeric column (pg returns numerics as strings). */
+function numOrUndefined(value: string | null): number | undefined {
+  return value === null ? undefined : Number(value);
+}
+
+/**
+ * Map a persisted ingredient row to the API response. Macro columns that are
+ * NULL stay absent in `nutrition` (unknown, not zero - S-6); the micronutrient
+ * map is carried through as absolute mass (AD-1).
+ */
+export function toIngredientResponse(row: IngredientRow) {
+  const nutrition: z.infer<typeof per100gSchema> = {
+    micronutrients: row.micronutrients as Record<string, Micronutrient>,
+  };
+  const calories = numOrUndefined(row.calories);
+  const proteinG = numOrUndefined(row.proteinG);
+  const carbsG = numOrUndefined(row.carbsG);
+  const fatG = numOrUndefined(row.fatG);
+  const fiberG = numOrUndefined(row.fiberG);
+  if (calories !== undefined) nutrition.calories = calories;
+  if (proteinG !== undefined) nutrition.proteinG = proteinG;
+  if (carbsG !== undefined) nutrition.carbsG = carbsG;
+  if (fatG !== undefined) nutrition.fatG = fatG;
+  if (fiberG !== undefined) nutrition.fiberG = fiberG;
+
+  return {
+    id: row.id,
+    name: row.name,
+    source: row.source,
+    fdcId: row.fdcId,
+    referenceGrams: Number(row.referenceGrams),
+    gramWeightPerQty: numOrUndefined(row.gramWeightPerQty) ?? null,
+    unitGramEquivalents: row.unitGramEquivalents,
+    nutrition,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
 
 /**
  * Map a typed UsdaError to the shared error envelope. Never include the key or
@@ -106,4 +200,69 @@ export function registerIngredientsRoutes(
       return reply.code(200).send(body);
     },
   );
+
+  // FR-3: create a custom ingredient (workspace-scoped, reference_grams basis).
+  app.post('/ingredients', async (request, reply) => {
+    const parsed = customIngredientInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message:
+            parsed.error.issues[0]?.message ?? 'Invalid ingredient payload',
+        },
+      });
+    }
+
+    const input = parsed.data;
+    const workspaceId = await resolveWorkspaceId(_db);
+
+    let row: IngredientRow | undefined;
+    try {
+      // Numeric columns take string values; absent macros stay NULL (unknown,
+      // never zero - S-6). Fully parameterized Drizzle insert (S-4).
+      const inserted = await _db
+        .insert(ingredients)
+        .values({
+          workspaceId,
+          name: input.name,
+          source: 'custom',
+          fdcId: null,
+          referenceGrams: String(input.referenceGrams),
+          gramWeightPerQty:
+            input.gramWeightPerQty !== undefined
+              ? String(input.gramWeightPerQty)
+              : null,
+          unitGramEquivalents: input.unitGramEquivalents ?? {},
+          calories: input.calories !== undefined ? String(input.calories) : null,
+          proteinG: input.proteinG !== undefined ? String(input.proteinG) : null,
+          carbsG: input.carbsG !== undefined ? String(input.carbsG) : null,
+          fatG: input.fatG !== undefined ? String(input.fatG) : null,
+          fiberG: input.fiberG !== undefined ? String(input.fiberG) : null,
+          micronutrients: input.micronutrients ?? {},
+        })
+        .returning();
+      row = inserted[0];
+    } catch (err) {
+      throw new PersistenceError('Failed to persist ingredient', { cause: err });
+    }
+    if (!row) {
+      throw new PersistenceError('Ingredient insert returned no row');
+    }
+
+    const body = ingredientResponseSchema.parse(toIngredientResponse(row));
+    return reply.code(201).send(body);
+  });
+
+  // AC-3.3: list the workspace's saved ingredients (custom + USDA snapshots).
+  app.get('/ingredients', async (_request, reply) => {
+    const workspaceId = await resolveWorkspaceId(_db);
+    const rows = await _db
+      .select()
+      .from(ingredients)
+      .where(eq(ingredients.workspaceId, workspaceId));
+
+    const body = ingredientListSchema.parse(rows.map(toIngredientResponse));
+    return reply.code(200).send(body);
+  });
 }
