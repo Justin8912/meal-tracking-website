@@ -364,22 +364,26 @@ function DayCell({
                 >
                   {entryLabel(entry)}
                 </button>
-                <span> ({entry.mealSlot})</span>
-                {editable ? (
+                {/* Row 2: slot badge + action buttons on a separate flex row so
+                    they never overlap the title text in narrow day cells. */}
+                <div className="meal-entry__meta">
+                  <span>({entry.mealSlot})</span>
+                  {editable ? (
+                    <button
+                      type="button"
+                      onClick={() => setMode({ kind: 'edit', entry })}
+                    >
+                      Edit
+                    </button>
+                  ) : null}
                   <button
                     type="button"
-                    onClick={() => setMode({ kind: 'edit', entry })}
+                    onClick={() => remove.mutate(entry.id)}
+                    disabled={remove.isPending}
                   >
-                    Edit
+                    Remove
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => remove.mutate(entry.id)}
-                  disabled={remove.isPending}
-                >
-                  Remove
-                </button>
+                </div>
                 {detailOpen ? <PlannedMealDetail entry={entry} /> : null}
               </li>
             );

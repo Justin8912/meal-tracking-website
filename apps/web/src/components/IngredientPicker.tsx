@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import { ApiError } from '../api/client.js';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 import {
@@ -69,8 +69,19 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
     setGrams(100);
   }
 
-  function handleConfirmUsda(event: FormEvent): void {
-    event.preventDefault();
+  // Enter inside a picker input must NOT submit the surrounding recipe <form>
+  // (that would reload the page and drop the in-progress recipe). The picker
+  // uses no <form> elements; this triggers the local action instead.
+  function onEnter(action: () => void) {
+    return (event: KeyboardEvent): void => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        action();
+      }
+    };
+  }
+
+  function confirmUsda(): void {
     if (!selected) return;
     snapshot.mutate(
       { fdcId: selected.fdcId },
@@ -97,6 +108,7 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
           type="search"
           value={term}
           onChange={(e) => setTerm(e.target.value)}
+          onKeyDown={onEnter(() => {})}
           placeholder="e.g. chicken breast"
         />
       </label>
@@ -133,10 +145,10 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
       ) : null}
 
       {selected ? (
-        <form
+        <div
           className="ingredient-picker__confirm"
+          role="group"
           aria-label="Confirm ingredient amount"
-          onSubmit={handleConfirmUsda}
         >
           <p>Adding: {selected.description}</p>
           <label>
@@ -150,6 +162,7 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
                 const next = Number.parseFloat(e.target.value);
                 setGrams(Number.isNaN(next) ? 0 : next);
               }}
+              onKeyDown={onEnter(confirmUsda)}
             />
           </label>
           {snapshot.error ? (
@@ -157,13 +170,17 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
               Could not add ingredient: {snapshot.error.message}
             </p>
           ) : null}
-          <button type="submit" disabled={snapshot.isPending}>
+          <button
+            type="button"
+            onClick={confirmUsda}
+            disabled={snapshot.isPending}
+          >
             {snapshot.isPending ? 'Adding...' : 'Confirm'}
           </button>
           <button type="button" onClick={() => setSelected(null)}>
             Cancel
           </button>
-        </form>
+        </div>
       ) : null}
 
       <button
@@ -210,8 +227,7 @@ function CustomIngredientForm({
     return Number.isNaN(n) ? undefined : n;
   }
 
-  function handleSubmit(event: FormEvent): void {
-    event.preventDefault();
+  function submitCustom(): void {
     create.mutate(
       {
         name: name.trim(),
@@ -226,10 +242,18 @@ function CustomIngredientForm({
   }
 
   return (
-    <form
+    <div
       className="ingredient-picker__custom"
+      role="group"
       aria-label="Custom ingredient"
-      onSubmit={handleSubmit}
+      onKeyDown={(e) => {
+        // No <form> here (it would nest inside the recipe form and reload the
+        // page on Enter). Handle Enter locally instead.
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          submitCustom();
+        }
+      }}
     >
       <label>
         Custom ingredient name
@@ -293,9 +317,13 @@ function CustomIngredientForm({
       {create.error ? (
         <p role="alert">Could not create ingredient: {create.error.message}</p>
       ) : null}
-      <button type="submit" disabled={create.isPending}>
+      <button
+        type="button"
+        onClick={submitCustom}
+        disabled={create.isPending}
+      >
         {create.isPending ? 'Creating...' : 'Create ingredient'}
       </button>
-    </form>
+    </div>
   );
 }

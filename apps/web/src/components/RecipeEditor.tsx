@@ -161,10 +161,22 @@ export function RecipeEditor({
     };
 
     // Validate against the shared Zod schema before the network call (S-3) so
-    // obvious problems are surfaced inline rather than as a 400.
+    // obvious problems are surfaced inline rather than as a 400. Map raw Zod
+    // messages to user-friendly text so we never show schema internals.
     const parsed = recipeInputSchema.safeParse(candidate);
     if (!parsed.success) {
-      setFormError(parsed.error.issues[0]?.message ?? 'Recipe is invalid');
+      const issue = parsed.error.issues[0];
+      const friendlyMessage = (() => {
+        if (!issue) return 'Recipe is invalid';
+        // ingredients array minimum
+        if (issue.path[0] === 'ingredients') return 'Please add at least one ingredient';
+        // name required
+        if (issue.path[0] === 'name') return 'Recipe name is required';
+        // servings out of range
+        if (issue.path[0] === 'servings') return 'Servings must be at least 1';
+        return issue.message;
+      })();
+      setFormError(friendlyMessage);
       return;
     }
 

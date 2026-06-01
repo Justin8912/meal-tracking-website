@@ -167,6 +167,83 @@ describe('IngredientPicker', () => {
     expect(added[0]?.ingredientId).toBe(customResponse.id);
   });
 
+  it('renders NO <form> element so it cannot submit a surrounding recipe form', () => {
+    // Nested <form>s are invalid HTML; a picker <form> inside the recipe
+    // editor's <form> caused clicking add/Enter to submit the outer form and
+    // reload the page, dropping the in-progress recipe. The picker must own no
+    // <form> at all. (Browser-only regression; jsdom guards the structure.)
+    const { container } = (() => {
+      const queryClient = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false },
+          mutations: { retry: false },
+        },
+      });
+      return render(
+        <QueryClientProvider client={queryClient}>
+          <IngredientPicker onAdd={() => undefined} />
+        </QueryClientProvider>,
+      );
+    })();
+
+    expect(container.querySelectorAll('form').length).toBe(0);
+
+    // Open the custom path too: that branch must also be form-free.
+    fireEvent.click(
+      screen.getByRole('button', { name: /add a custom ingredient/i }),
+    );
+    expect(container.querySelectorAll('form').length).toBe(0);
+  });
+
+  it('adding an ingredient never submits a surrounding <form> (no page reload)', async () => {
+    window._env_ = { API_BASE_URL: 'http://x' };
+    const added: Array<Omit<EditorIngredientLine, 'key'>> = [];
+    const onOuterSubmit = vi.fn((e: { preventDefault: () => void }) =>
+      e.preventDefault(),
+    );
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes('/ingredients/search')) {
+        return Promise.resolve(jsonResponse([usdaMatch]));
+      }
+      if (url.includes('/ingredients/usda/')) {
+        return Promise.resolve(jsonResponse(snapshotResponse, 201));
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    // Wrap the picker in a form exactly as the recipe editor does. If the
+    // picker submitted (old nested-form bug, or a stray type="submit" button),
+    // this handler would fire — in a real browser that reloads the page.
+    render(
+      <QueryClientProvider client={queryClient}>
+        <form onSubmit={onOuterSubmit}>
+          <IngredientPicker onAdd={(l) => added.push(l)} />
+        </form>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.change(screen.getByLabelText(/search foods/i), {
+      target: { value: 'chicken' },
+    });
+    fireEvent.click(
+      await screen.findByRole('button', { name: /select Chicken breast/i }),
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: /confirm/i }),
+    );
+
+    await waitFor(() => {
+      expect(added.length).toBe(1);
+    });
+    // The add is a pure state update; the surrounding form was never submitted.
+    expect(onOuterSubmit).not.toHaveBeenCalled();
+  });
+
   it('on search error shows a clear message and the custom-entry path (AC-2.3)', async () => {
     window._env_ = { API_BASE_URL: 'http://x' };
 
