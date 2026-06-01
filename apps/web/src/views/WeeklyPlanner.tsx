@@ -6,6 +6,7 @@ import {
   useWeekPlan,
   useSavePlanEntry,
   useDeletePlanEntry,
+  shiftWeek,
 } from '../query/plans.js';
 import { useRecipes } from '../query/recipes.js';
 
@@ -27,9 +28,13 @@ import { useRecipes } from '../query/recipes.js';
  * recipe-select add path and the explicit empty/add affordance land in STEP-10.
  * No emojis (S-7).
  *
- * The current week's Monday is computed client-side here; the server also
- * normalizes weekStart to the Monday (AD-2), so the two agree. Week navigation
- * (shifting the Monday by +/- 7 days) lands in Bundle 3.
+ * The active week's Monday is held in component state and computed client-side;
+ * the server also normalizes weekStart to the Monday (AD-2), so the two agree.
+ * Week navigation shifts that Monday by +/- 7 days via shiftWeek (date
+ * arithmetic, year-boundary safe per F-11/S-4); the displayed week is derived
+ * entirely from the week-keyed query so revisiting a week is instant from cache
+ * (AD-4) and a past week's saved meals are always re-read from the DB (AC-3.3).
+ * A failed week load shows an error + retry, not a blank/stale week (AC-3.4).
  */
 
 /** Day labels in grid order: Monday (dayOfWeek 0) .. Sunday (dayOfWeek 6). */
@@ -407,8 +412,18 @@ function DayCell({
 }
 
 export function WeeklyPlanner(): JSX.Element {
-  const weekStart = mondayOf(new Date());
-  const { data: entries, isLoading, isError, error } = useWeekPlan(weekStart);
+  // The active week's Monday DATE is the ONLY navigation state (AD-2). It starts
+  // at the current week and shifts by +/- 7 days via shiftWeek for back/forward
+  // navigation; the displayed week is derived entirely from the week-keyed
+  // server query below, so no plan data lives in component state (AC-3.3).
+  const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
+  const {
+    data: entries,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useWeekPlan(weekStart);
 
   // Group entries by day for O(1) per-day lookup when rendering the grid.
   const byDay = new Map<number, PlanEntry[]>();
@@ -421,14 +436,40 @@ export function WeeklyPlanner(): JSX.Element {
   return (
     <section aria-labelledby="weekly-planner-heading">
       <h1 id="weekly-planner-heading">Weekly Planner</h1>
-      <p>Week of {weekStart}</p>
+
+      {/* Navigation shifts the active Monday by +/- 7 days (date arithmetic,
+          year-boundary safe per F-11/S-4); each week is a distinct
+          ['plan', weekStart] cache entry, so a revisited week renders instantly
+          from cache (AD-4). */}
+      <nav aria-label="Week navigation">
+        <button
+          type="button"
+          onClick={() => setWeekStart((w) => shiftWeek(w, 'prev'))}
+        >
+          Previous week
+        </button>
+        <p>Week of {weekStart}</p>
+        <button
+          type="button"
+          onClick={() => setWeekStart((w) => shiftWeek(w, 'next'))}
+        >
+          Next week
+        </button>
+      </nav>
 
       {isLoading ? (
         <p role="status">Loading this week&apos;s plan...</p>
       ) : isError ? (
-        <p role="alert">
-          Could not load the weekly plan: {error?.message ?? 'unknown error'}
-        </p>
+        // A failed week load shows a clear error + a retry bound to the query's
+        // refetch — never a blank or stale (previous-week) grid (AC-3.4).
+        <div role="alert" className="weekly-planner__error">
+          <p>
+            Could not load the weekly plan: {error?.message ?? 'unknown error'}
+          </p>
+          <button type="button" onClick={() => void refetch()}>
+            Retry
+          </button>
+        </div>
       ) : (
         <ol aria-label="Days of the week" className="weekly-planner__week">
           {DAY_LABELS.map((label, dayOfWeek) => (

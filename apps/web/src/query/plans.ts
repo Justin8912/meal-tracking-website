@@ -24,6 +24,34 @@ export function planQueryKey(weekStart: string): readonly ['plan', string] {
   return ['plan', weekStart] as const;
 }
 
+/** Direction of a week navigation step. */
+export type WeekDirection = 'prev' | 'next';
+
+/**
+ * The Monday DATE (YYYY-MM-DD) of the week containing `isoDate`, computed at UTC
+ * so it is timezone-independent and matches the server's normalization (AD-2).
+ */
+function mondayOf(isoDate: string): Date {
+  const d = new Date(`${isoDate}T00:00:00.000Z`);
+  const dow = d.getUTCDay(); // 0=Sunday..6=Saturday
+  const daysSinceMonday = (dow + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - daysSinceMonday);
+  return d;
+}
+
+/**
+ * Shift a week's Monday DATE by exactly +/- 7 days for back/forward navigation
+ * (AD-2, F-11, S-4). The input is first normalized to its week's Monday, then 7
+ * days are added or subtracted by pure DATE arithmetic at UTC — never ISO
+ * week-number (YYYY-Www) math, which mis-handles the 52/53-week year boundary
+ * (the prototype's bug, F-11). Returns the adjacent Monday as YYYY-MM-DD.
+ */
+export function shiftWeek(weekStart: string, direction: WeekDirection): string {
+  const monday = mondayOf(weekStart);
+  monday.setUTCDate(monday.getUTCDate() + (direction === 'next' ? 7 : -7));
+  return monday.toISOString().slice(0, 10);
+}
+
 /** Fetch the week's plan entries from GET /plans?weekStart= via the platform client. */
 async function fetchWeekPlan(weekStart: string): Promise<PlanEntry[]> {
   const params = new URLSearchParams({ weekStart });
