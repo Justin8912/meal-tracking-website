@@ -10,6 +10,7 @@ import {
 } from '../query/plans.js';
 import { useRecipes } from '../query/recipes.js';
 import { PlannedMealDetail } from '../components/PlannedMealDetail.js';
+import { RecipePalette } from '../components/RecipePalette.js';
 
 /**
  * Weekly Planner view (FR-1, AD-4). Fills the platform's /planner placeholder
@@ -433,6 +434,10 @@ export function WeeklyPlanner(): JSX.Element {
   // navigation; the displayed week is derived entirely from the week-keyed
   // server query below, so no plan data lives in component state (AC-3.3).
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
+  // Edit mode reveals the two-panel layout (palette left, week right, AC-4.1).
+  // The drag/tap-to-assign wiring lives in STEP-20; this flag only governs the
+  // layout and the palette's presence.
+  const [editMode, setEditMode] = useState(false);
   const {
     data: entries,
     isLoading,
@@ -452,6 +457,34 @@ export function WeeklyPlanner(): JSX.Element {
     list.push(entry);
     byDay.set(entry.dayOfWeek, list);
   }
+
+  const week =
+    isLoading ? (
+      <p role="status">Loading this week&apos;s plan...</p>
+    ) : isError ? (
+      // A failed week load shows a clear error + a retry bound to the query's
+      // refetch — never a blank or stale (previous-week) grid (AC-3.4).
+      <div role="alert" className="weekly-planner__error">
+        <p>
+          Could not load the weekly plan: {error?.message ?? 'unknown error'}
+        </p>
+        <button type="button" onClick={() => void refetch()}>
+          Retry
+        </button>
+      </div>
+    ) : (
+      <ol aria-label="Days of the week" className="weekly-planner__week">
+        {DAY_LABELS.map((label, dayOfWeek) => (
+          <DayCell
+            key={label}
+            label={label}
+            weekStart={weekStart}
+            dayOfWeek={dayOfWeek}
+            entries={byDay.get(dayOfWeek) ?? []}
+          />
+        ))}
+      </ol>
+    );
 
   return (
     <section aria-labelledby="weekly-planner-heading">
@@ -477,31 +510,41 @@ export function WeeklyPlanner(): JSX.Element {
         </button>
       </nav>
 
-      {isLoading ? (
-        <p role="status">Loading this week&apos;s plan...</p>
-      ) : isError ? (
-        // A failed week load shows a clear error + a retry bound to the query's
-        // refetch — never a blank or stale (previous-week) grid (AC-3.4).
-        <div role="alert" className="weekly-planner__error">
-          <p>
-            Could not load the weekly plan: {error?.message ?? 'unknown error'}
-          </p>
-          <button type="button" onClick={() => void refetch()}>
-            Retry
-          </button>
-        </div>
+      {/* The edit toggle reveals the two-panel layout (AC-4.1). Outside edit
+          mode the week renders alone, exactly as Bundles 1-3. */}
+      <button
+        type="button"
+        aria-pressed={editMode}
+        onClick={() => setEditMode((on) => !on)}
+      >
+        {editMode ? 'Done editing' : 'Edit plan'}
+      </button>
+
+      {editMode ? (
+        // Two-column grid (>=768px): palette LEFT, week RIGHT (AC-4.1). On a
+        // phone it collapses to a single column with the palette stacked as a
+        // drawer above the week (NFR-2). The app ships no stylesheet yet, so the
+        // responsive rule is carried in a scoped <style> on the layout class.
+        <>
+          <style>{`
+            .weekly-planner__edit-layout {
+              display: grid;
+              gap: 1rem;
+              grid-template-columns: minmax(0, 1fr);
+            }
+            @media (min-width: 768px) {
+              .weekly-planner__edit-layout {
+                grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr);
+              }
+            }
+          `}</style>
+          <div className="weekly-planner__edit-layout">
+            <RecipePalette />
+            {week}
+          </div>
+        </>
       ) : (
-        <ol aria-label="Days of the week" className="weekly-planner__week">
-          {DAY_LABELS.map((label, dayOfWeek) => (
-            <DayCell
-              key={label}
-              label={label}
-              weekStart={weekStart}
-              dayOfWeek={dayOfWeek}
-              entries={byDay.get(dayOfWeek) ?? []}
-            />
-          ))}
-        </ol>
+        week
       )}
     </section>
   );
