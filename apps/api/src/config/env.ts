@@ -26,8 +26,13 @@ const envSchema = z.object({
   // USDA FoodData Central API key. Read ONLY from the runtime environment
   // (S-2): it is never bundled client-side or baked into a build ARG. Optional
   // so the server still boots without it; the USDA proxy degrades to
-  // cache/custom entry when it is absent (AD-3, NFR-5).
-  USDA_API_KEY: z.string().min(1).optional(),
+  // cache/custom entry when it is absent (AD-3, NFR-5). An empty string (e.g.
+  // Compose substituting an unset ${USDA_API_KEY}) is treated as absent so the
+  // server degrades gracefully rather than failing config validation.
+  USDA_API_KEY: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+    z.string().min(1).optional(),
+  ),
   // Override for the USDA base URL (defaults to production). Lets tests point
   // the client at a stub server without touching the real upstream.
   USDA_BASE_URL: z.string().url().default('https://api.nal.usda.gov/fdc/v1'),
