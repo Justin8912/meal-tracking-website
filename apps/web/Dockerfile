@@ -8,11 +8,11 @@ FROM node:20-alpine AS build
 WORKDIR /repo
 
 # Install workspace dependencies using only manifests first for better caching.
-COPY package.json package-lock.json tsconfig.base.json ./
+COPY package.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
 COPY apps/web/package.json apps/web/
 COPY apps/api/package.json apps/api/
-RUN npm ci
+RUN npm install
 
 # Copy the sources needed to build the web workspace and its shared dependency.
 COPY packages/shared/ packages/shared/

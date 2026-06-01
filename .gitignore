@@ -26,3 +26,6 @@ npmrc.verify
 Dockerfile.verify
 Dockerfile.web.verify
 docker-compose.verify.yml
+
+# Lockfile not tracked (deps installed where registry is reachable; not required by docker)
+package-lock.json

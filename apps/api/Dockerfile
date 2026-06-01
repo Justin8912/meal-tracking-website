@@ -7,7 +7,7 @@
 #
 # The runtime executes plain Node on the emitted dist/ output (node dist/server.js).
 # There is NO tsx in the runtime image: tsx is a devDependency only, so the
-# production install (npm ci --omit=dev) never pulls it in. The shared and
+# pruned production tree (npm prune --omit=dev) never pulls it in. The shared and
 # nutrition-engine workspace packages are compiled to dist/ as well and resolved at
 # runtime via their default export condition (compiled JS), not their "development"
 # (TS source) condition. The /api/v1/plans/summary route imports
@@ -18,12 +18,12 @@
 FROM node:20-alpine AS build
 WORKDIR /repo
 
-COPY package.json package-lock.json tsconfig.base.json ./
+COPY package.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/nutrition-engine/package.json packages/nutrition-engine/
 COPY apps/web/package.json apps/web/
 COPY apps/api/package.json apps/api/
-RUN npm ci
+RUN npm install
 
 COPY packages/shared/ packages/shared/
 COPY packages/nutrition-engine/ packages/nutrition-engine/
@@ -44,8 +44,10 @@ FROM node:20-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /repo
 
-# Production dependency tree (no dev tooling, no tsx).
-COPY --from=build /repo/package.json /repo/package-lock.json ./
+# Production dependency tree (no dev tooling, no tsx). No package-lock.json is
+# copied: the runtime never installs, so it depends on neither a lockfile nor a
+# registry. package.json is kept only for ESM/module resolution.
+COPY --from=build /repo/package.json ./
 COPY --from=build /repo/node_modules ./node_modules
 
 # Compiled shared package: manifest + emitted JS/declarations (dist/index.js).
