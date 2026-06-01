@@ -123,7 +123,11 @@ describe('WeeklyPlanner recipe add + empty-day state', () => {
 
     // Open the recipe-select add path for Monday and choose the saved recipe.
     fireEvent.click(within(monday).getByRole('button', { name: /add recipe/i }));
-    const recipeSelect = await within(monday).findByLabelText(/recipe/i);
+    const recipeSelect = await within(monday).findByRole('combobox', {
+      name: /^recipe$/i,
+    });
+    // Wait for the saved recipe option to load before selecting it.
+    await within(monday).findByRole('option', { name: 'Saved Stir Fry' });
     fireEvent.change(recipeSelect, { target: { value: RECIPE_ID } });
     fireEvent.click(within(monday).getByRole('button', { name: /^add to day/i }));
 

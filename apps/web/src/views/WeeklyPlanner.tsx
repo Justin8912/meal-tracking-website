@@ -7,6 +7,7 @@ import {
   useSavePlanEntry,
   useDeletePlanEntry,
 } from '../query/plans.js';
+import { useRecipes } from '../query/recipes.js';
 
 /**
  * Weekly Planner view (FR-1, AD-4). Fills the platform's /planner placeholder
@@ -196,6 +197,112 @@ function DayMealForm({
   );
 }
 
+/**
+ * A "select a recipe" add form for a single day (AC-1.2). The recipe choices
+ * come from the recipe-library GET /recipes via the useRecipes hook; on submit
+ * it POSTs a RECIPE-ONLY plan entry (recipeId set, no freeform fields, XOR per
+ * S-1) to the chosen day via the week-keyed save mutation. Drag-to-assign is
+ * Bundle 5; this is the non-DnD add path. On a save failure it shows a clear
+ * "change not saved" message and keeps the selection (AC-1.6).
+ */
+function DayRecipeForm({
+  weekStart,
+  dayOfWeek,
+  onDone,
+}: {
+  weekStart: string;
+  dayOfWeek: number;
+  onDone: () => void;
+}): JSX.Element {
+  const { data: recipes, isLoading } = useRecipes();
+  const [recipeId, setRecipeId] = useState('');
+  const [mealSlot, setMealSlot] = useState<MealSlot>('breakfast');
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const save = useSavePlanEntry();
+
+  function handleSubmit(event: FormEvent): void {
+    event.preventDefault();
+    setFormError(null);
+
+    if (recipeId === '') {
+      setFormError('Select a recipe to add');
+      return;
+    }
+
+    const candidate: PlanEntryInput = {
+      weekStart,
+      dayOfWeek,
+      mealSlot,
+      recipeId,
+    };
+
+    // Validate against the shared schema (incl. XOR) before the network call so
+    // a recipe-only entry never carries freeform fields (S-1).
+    const parsed = planEntryInputSchema.safeParse(candidate);
+    if (!parsed.success) {
+      setFormError(parsed.error.issues[0]?.message ?? 'Meal is invalid');
+      return;
+    }
+
+    save.mutate(
+      { input: parsed.data },
+      { onSuccess: () => onDone() },
+    );
+  }
+
+  const saveErrorMessage =
+    save.error instanceof ApiError
+      ? save.error.message
+      : save.error?.message ?? null;
+
+  return (
+    <form aria-label="Add recipe to day" onSubmit={handleSubmit}>
+      <label>
+        Recipe
+        <select
+          value={recipeId}
+          onChange={(e) => setRecipeId(e.target.value)}
+        >
+          <option value="">
+            {isLoading ? 'Loading recipes...' : 'Select a recipe'}
+          </option>
+          {(recipes ?? []).map((recipe) => (
+            <option key={recipe.id} value={recipe.id}>
+              {recipe.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Meal slot
+        <select
+          value={mealSlot}
+          onChange={(e) => setMealSlot(e.target.value as MealSlot)}
+        >
+          {MEAL_SLOTS.map((slot) => (
+            <option key={slot} value={slot}>
+              {slot}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {formError ? <p role="alert">{formError}</p> : null}
+      {saveErrorMessage ? (
+        <p role="alert">Change not saved: {saveErrorMessage}</p>
+      ) : null}
+
+      <button type="submit" disabled={save.isPending}>
+        {save.isPending ? 'Adding...' : 'Add to day'}
+      </button>
+      <button type="button" onClick={onDone} disabled={save.isPending}>
+        Cancel
+      </button>
+    </form>
+  );
+}
+
 /** The contents of a single day cell: its meals plus the add/edit/remove affordances. */
 function DayCell({
   label,
@@ -208,9 +315,13 @@ function DayCell({
   dayOfWeek: number;
   entries: PlanEntry[];
 }): JSX.Element {
-  // Which UI is open: 'none', the add form, or an edit form for a given entry.
+  // Which UI is open: 'none', the freeform add form, the recipe add form, or an
+  // edit form for a given entry.
   const [mode, setMode] = useState<
-    { kind: 'none' } | { kind: 'add' } | { kind: 'edit'; entry: PlanEntry }
+    | { kind: 'none' }
+    | { kind: 'add' }
+    | { kind: 'add-recipe' }
+    | { kind: 'edit'; entry: PlanEntry }
   >({ kind: 'none' });
   const remove = useDeletePlanEntry();
 
@@ -260,11 +371,25 @@ function DayCell({
       ) : null}
 
       {mode.kind === 'none' ? (
-        <button type="button" onClick={() => setMode({ kind: 'add' })}>
-          Add meal
-        </button>
+        <>
+          <button type="button" onClick={() => setMode({ kind: 'add' })}>
+            Add meal
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode({ kind: 'add-recipe' })}
+          >
+            Add recipe
+          </button>
+        </>
       ) : mode.kind === 'add' ? (
         <DayMealForm
+          weekStart={weekStart}
+          dayOfWeek={dayOfWeek}
+          onDone={() => setMode({ kind: 'none' })}
+        />
+      ) : mode.kind === 'add-recipe' ? (
+        <DayRecipeForm
           weekStart={weekStart}
           dayOfWeek={dayOfWeek}
           onDone={() => setMode({ kind: 'none' })}
