@@ -5,7 +5,11 @@ import {
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
-import type { PlanEntry, PlanEntryInput } from '@meal-tracking/shared';
+import type {
+  PlanEntry,
+  PlanEntryInput,
+  WeeklySummary,
+} from '@meal-tracking/shared';
 import { apiFetch } from '../api/client.js';
 
 /**
@@ -74,6 +78,41 @@ export function useWeekPlan(
 }
 
 /**
+ * Query key for a week's nutrition summary: `['plan-summary', weekStart]`. It
+ * shares neither the `['plan', ...]` prefix nor invalidation, but a plan write
+ * invalidates `['plan']` AND `['plan-summary']` (see {@link useSavePlanEntry})
+ * so the summary recomputes after meals change.
+ */
+export function weeklySummaryQueryKey(
+  weekStart: string,
+): readonly ['plan-summary', string] {
+  return ['plan-summary', weekStart] as const;
+}
+
+/** Fetch the week's macros summary from GET /plans/summary?weekStart=. */
+async function fetchWeeklySummary(weekStart: string): Promise<WeeklySummary> {
+  const params = new URLSearchParams({ weekStart });
+  return apiFetch<WeeklySummary>(`/api/v1/plans/summary?${params.toString()}`);
+}
+
+/**
+ * Query hook for a week's nutrition summary (FR-5, AD-6). The server aggregates
+ * MACROS ONLY across the week's recipe-based entries via the shared engine on
+ * unrounded per-serving values (AC-5.1); freeform meals and recipe tombstones
+ * are reported in `excludedEntryIds` so the UI can state what is not counted
+ * (AC-5.2). Keyed by the week's Monday DATE, like the plan query, so navigating
+ * back to a week reuses its cached summary (AD-4).
+ */
+export function useWeeklySummary(
+  weekStart: string,
+): UseQueryResult<WeeklySummary, Error> {
+  return useQuery({
+    queryKey: weeklySummaryQueryKey(weekStart),
+    queryFn: () => fetchWeeklySummary(weekStart),
+  });
+}
+
+/**
  * Persist a plan entry. A `planEntryId` routes to PUT /plans/:id (edit),
  * otherwise POST /plans (add). The body is the shared PlanEntryInput contract
  * incl. the recipe/freeform XOR (S-1); the server normalizes weekStart to the
@@ -113,7 +152,11 @@ export function useSavePlanEntry(): UseMutationResult<
     mutationFn: ({ input, planEntryId }: SavePlanEntryArgs) =>
       savePlanEntry(input, planEntryId),
     onSuccess: () => {
+      // Invalidate the week's plan AND its nutrition summary so the macro totals
+      // recompute after a meal is added/edited (FR-5). The two keys do not share
+      // a prefix, so both are invalidated explicitly.
       void queryClient.invalidateQueries({ queryKey: ['plan'] });
+      void queryClient.invalidateQueries({ queryKey: ['plan-summary'] });
     },
   });
 }
@@ -134,6 +177,7 @@ export function useDeletePlanEntry(): UseMutationResult<void, Error, string> {
     mutationFn: (planEntryId: string) => deletePlanEntry(planEntryId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['plan'] });
+      void queryClient.invalidateQueries({ queryKey: ['plan-summary'] });
     },
   });
 }

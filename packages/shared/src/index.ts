@@ -34,4 +34,5 @@ export {
   recipeDetailSchema,
   mealSlotSchema,
   planEntryInputSchema,
+  weeklySummarySchema,
 } from './schemas.js';

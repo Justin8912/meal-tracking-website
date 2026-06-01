@@ -13,6 +13,7 @@ import type {
   Tag,
   RecipeDetailIngredient,
   RecipeDetail,
+  WeeklySummary,
 } from './types.js';
 
 /**
@@ -170,3 +171,26 @@ export const planEntryInputSchema = z
       path: ['recipeId'],
     },
   );
+
+/**
+ * GET /plans/summary response body (FR-5, AD-6; S-1). Macros ONLY - the totals
+ * carry the five macro keys with no micronutrient map, because %DV/micros are
+ * not summable across ingredients at the weekly level (AC-5.1). The totals are
+ * the result of summing UNROUNDED per-serving values across the week's
+ * recipe-based entries and rounding ONCE at the boundary (F-20, S-5); freeform
+ * meals and recipe tombstones carry no nutrition and are reported in
+ * `excludedEntryIds` so the UI can state what is not counted (AC-5.2). The API
+ * validates its response against this schema before sending (S-1).
+ */
+export const weeklySummarySchema = z.object({
+  weekStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  totals: z.object({
+    calories: z.number(),
+    proteinG: z.number(),
+    carbsG: z.number(),
+    fatG: z.number(),
+    fiberG: z.number(),
+  }),
+  countedEntryIds: z.array(z.string().uuid()),
+  excludedEntryIds: z.array(z.string().uuid()),
+}) satisfies z.ZodType<WeeklySummary>;

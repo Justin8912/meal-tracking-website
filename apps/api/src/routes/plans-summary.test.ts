@@ -10,7 +10,10 @@ import {
   formatNutrition,
   type NutritionLine,
 } from '@meal-tracking/nutrition-engine';
+import type { WeeklySummary } from '@meal-tracking/shared';
 import { DEFAULT_WORKSPACE_ID } from '../constants.js';
+
+type MacroTotals = WeeklySummary['totals'];
 
 const TEST_DATABASE_URL = process.env.DATABASE_URL;
 const describeDb = TEST_DATABASE_URL ? describe : describe.skip;
@@ -61,6 +64,8 @@ interface CreatedRecipe {
   servings: number;
   /** Engine lines for this recipe (usage joined to ingredient nutrition). */
   lines: NutritionLine[];
+  /** The plan-entry id created for this recipe in WEEK (set during planning). */
+  entryId?: string;
 }
 
 describeDb('GET /plans/summary weekly macro aggregation (integration)', () => {
@@ -99,7 +104,11 @@ describeDb('GET /plans/summary weekly macro aggregation (integration)', () => {
     );
     const powderId = powder.rows[0]?.id as string;
 
-    // Recipe A: 3 servings, oats 175g + powder 35g (factors 1.75 / 0.35).
+    // Recipe A: 3 servings, oats 176g + powder 34g (factors 1.76 / 0.34).
+    // Recipe B: 2 servings, oats 93g (factor 0.93). These quantities are chosen
+    // so the per-serving protein of each recipe rounds such that summing the
+    // PRE-ROUNDED displays (26.9) diverges from summing the UNROUNDED values and
+    // rounding once (26.8) - the F-20 guard the endpoint must satisfy.
     const recipeA = await db.execute(
       sql`INSERT INTO recipes (workspace_id, name, meal_type, servings)
           VALUES (${DEFAULT_WORKSPACE_ID}, 'SUMTEST Recipe A', 'breakfast', 3) RETURNING id`,
@@ -107,10 +116,9 @@ describeDb('GET /plans/summary weekly macro aggregation (integration)', () => {
     const recipeAId = recipeA.rows[0]?.id as string;
     await db.execute(
       sql`INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity, unit_code, position)
-          VALUES (${recipeAId}, ${oatsId}, 175, 'g', 0), (${recipeAId}, ${powderId}, 35, 'g', 1)`,
+          VALUES (${recipeAId}, ${oatsId}, 176, 'g', 0), (${recipeAId}, ${powderId}, 34, 'g', 1)`,
     );
 
-    // Recipe B: 2 servings, oats 90g (factor 0.9).
     const recipeB = await db.execute(
       sql`INSERT INTO recipes (workspace_id, name, meal_type, servings)
           VALUES (${DEFAULT_WORKSPACE_ID}, 'SUMTEST Recipe B', 'dinner', 2) RETURNING id`,
@@ -118,7 +126,7 @@ describeDb('GET /plans/summary weekly macro aggregation (integration)', () => {
     const recipeBId = recipeB.rows[0]?.id as string;
     await db.execute(
       sql`INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity, unit_code, position)
-          VALUES (${recipeBId}, ${oatsId}, 90, 'g', 0)`,
+          VALUES (${recipeBId}, ${oatsId}, 93, 'g', 0)`,
     );
 
     // Recipe C is created then DELETED so its plan entry becomes a tombstone
@@ -163,14 +171,14 @@ describeDb('GET /plans/summary weekly macro aggregation (integration)', () => {
       id: recipeAId,
       servings: 3,
       lines: [
-        { quantity: 175, unitCode: 'g', ingredient: oatsIng },
-        { quantity: 35, unitCode: 'g', ingredient: powderIng },
+        { quantity: 176, unitCode: 'g', ingredient: oatsIng },
+        { quantity: 34, unitCode: 'g', ingredient: powderIng },
       ],
     });
     recipes.push({
       id: recipeBId,
       servings: 2,
-      lines: [{ quantity: 90, unitCode: 'g', ingredient: oatsIng }],
+      lines: [{ quantity: 93, unitCode: 'g', ingredient: oatsIng }],
     });
 
     const { buildServer } = await import('../server.js');
@@ -192,6 +200,12 @@ describeDb('GET /plans/summary weekly macro aggregation (integration)', () => {
       expect(res.status).toBe(201);
       if (recipeId === recipeCId) {
         tombstoneId = res.body.id as string;
+      }
+      // Record the plan-entry id for each recipe-based meal so the exclusion
+      // test can assert the COUNTED set carries plan-entry ids (not recipe ids).
+      const match = recipes.find((r) => r.id === recipeId);
+      if (match) {
+        match.entryId = res.body.id as string;
       }
     }
 
@@ -257,7 +271,7 @@ describeDb('GET /plans/summary weekly macro aggregation (integration)', () => {
     expect(res.body.weekStartDate).toBe(WEEK);
 
     const expected = expectedTotals();
-    const totals = res.body.totals as Record<string, number>;
+    const totals = res.body.totals as MacroTotals;
     expect(Math.abs(totals.calories - expected.calories)).toBeLessThanOrEqual(1);
     expect(Math.abs(totals.proteinG - expected.proteinG)).toBeLessThanOrEqual(0.1);
     expect(Math.abs(totals.carbsG - expected.carbsG)).toBeLessThanOrEqual(0.1);
@@ -286,7 +300,7 @@ describeDb('GET /plans/summary weekly macro aggregation (integration)', () => {
     // would not prove unrounded summation.
     expect(preRounded).not.toBe(correct.proteinG);
     // The endpoint must use the correct (unrounded-sum) value.
-    expect((res.body.totals as Record<string, number>).proteinG).toBe(
+    expect((res.body.totals as MacroTotals).proteinG).toBe(
       correct.proteinG,
     );
   });
@@ -314,10 +328,10 @@ describeDb('GET /plans/summary weekly macro aggregation (integration)', () => {
 
     expect(excluded).toContain(freeformId);
     expect(excluded).toContain(tombstoneId);
-    // Recipe-based entries are counted, not excluded.
+    // Recipe-based entries are counted (by PLAN-ENTRY id), not excluded.
     for (const r of recipes) {
-      expect(counted).toContain(r.id);
-      expect(excluded).not.toContain(r.id);
+      expect(counted).toContain(r.entryId);
+      expect(excluded).not.toContain(r.entryId);
     }
     // The freeform/tombstone are not in the counted set.
     expect(counted).not.toContain(freeformId);

@@ -1,10 +1,24 @@
 import type { FastifyInstance } from 'fastify';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
-import { planEntryInputSchema } from '@meal-tracking/shared';
-import type { PlanEntry } from '@meal-tracking/shared';
+import { planEntryInputSchema, weeklySummarySchema } from '@meal-tracking/shared';
+import type { Micronutrient, PlanEntry, WeeklySummary } from '@meal-tracking/shared';
+import {
+  computeRecipeNutrition,
+  formatNutrition,
+  type MacroKey,
+  type Nutrition,
+  type NutritionLine,
+} from '@meal-tracking/nutrition-engine';
 import type { Db } from '../db/client.js';
-import { planEntries, type PlanEntryRow } from '../db/schema.js';
+import {
+  planEntries,
+  recipes,
+  recipeIngredients,
+  ingredients,
+  type PlanEntryRow,
+  type IngredientRow,
+} from '../db/schema.js';
 import { PersistenceError } from '../db/persist.js';
 import { resolveWorkspaceId } from '../workspace.js';
 
@@ -59,6 +73,198 @@ function toPlanEntry(row: PlanEntryRow): PlanEntry {
     freeformTitle: row.freeformTitle,
     freeformDescription: row.freeformDescription,
     freeformLink: row.freeformLink,
+  };
+}
+
+/**
+ * Which macros the persisted ingredient row did NOT provide (absent = unknown,
+ * not zero - S-6). pg returns numerics as strings; a NULL column comes back as
+ * `null`. Mirrors the web client's `absentMacrosOf` so the server feeds the
+ * shared engine identical inputs and the weekly summary cannot drift from the
+ * per-meal detail's nutrition (AD-4, AD-6).
+ */
+function absentMacrosOf(row: IngredientRow): MacroKey[] {
+  const absent: MacroKey[] = [];
+  if (row.calories === null) absent.push('calories');
+  if (row.proteinG === null) absent.push('proteinG');
+  if (row.carbsG === null) absent.push('carbsG');
+  if (row.fatG === null) absent.push('fatG');
+  if (row.fiberG === null) absent.push('fiberG');
+  return absent;
+}
+
+/**
+ * Build the engine `Nutrition` for an ingredient row. A NULL (absent) macro
+ * column reads as 0 in the numeric accumulator, but `absentMacrosOf` records it
+ * so the engine flags the line `missing-macros` rather than treating the
+ * placeholder 0 as a real total (F-5, S-6). The micronutrient JSONB is carried
+ * through as absolute mass (AD-1) - the weekly summary does not aggregate it.
+ */
+function toEngineNutrition(row: IngredientRow): Nutrition {
+  return {
+    calories: row.calories === null ? 0 : Number(row.calories),
+    proteinG: row.proteinG === null ? 0 : Number(row.proteinG),
+    carbsG: row.carbsG === null ? 0 : Number(row.carbsG),
+    fatG: row.fatG === null ? 0 : Number(row.fatG),
+    fiberG: row.fiberG === null ? 0 : Number(row.fiberG),
+    micronutrients: row.micronutrients as Record<string, Micronutrient>,
+  };
+}
+
+/** A zeroed macro accumulator (micronutrients are not aggregated weekly). */
+function emptyMacroTotal(): Nutrition {
+  return { calories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0, micronutrients: {} };
+}
+
+/**
+ * Compute the weekly macros summary for a normalized Monday DATE (FR-5, AD-6).
+ *
+ * Aggregates MACROS ONLY across the week's recipe-based plan entries. For each
+ * recipe-backed entry it rebuilds the engine lines server-side exactly as the
+ * web detail/editor does (recipe ingredient usage joined to the ingredient's
+ * per-`referenceGrams` nutrition - AD-4), computes its per-serving nutrition via
+ * the shared engine in FULL PRECISION, and sums those UNROUNDED per-serving
+ * values across the week. Rounding happens ONCE at the end via `formatNutrition`
+ * (the single rounding boundary) so error never compounds across meals (F-20,
+ * S-5). Micronutrients/%DV are never aggregated (not summable across differing
+ * reference amounts - AC-5.1).
+ *
+ * Freeform entries and recipe tombstones (recipe_id NULL) carry no nutrition;
+ * their ids go to `excludedEntryIds` so the UI can state what is not counted,
+ * never silently zero-counting them (AC-5.2). Recipe-based entries go to
+ * `countedEntryIds`. A recipe-backed entry whose ingredients cannot be fully
+ * computed still contributes its computable macros (the engine excludes only the
+ * unresolvable lines, never zero-filling) and remains counted; weekly
+ * completeness is out of scope for this Nice-to-Have (AC-5.1/5.2 only).
+ */
+async function computeWeeklySummary(
+  db: Db,
+  workspaceId: string,
+  weekStartDate: string,
+): Promise<WeeklySummary> {
+  const entries = await db
+    .select({ id: planEntries.id, recipeId: planEntries.recipeId })
+    .from(planEntries)
+    .where(
+      and(
+        eq(planEntries.workspaceId, workspaceId),
+        eq(planEntries.weekStartDate, weekStartDate),
+      ),
+    )
+    .orderBy(asc(planEntries.dayOfWeek), asc(planEntries.position));
+
+  const countedEntryIds: string[] = [];
+  const excludedEntryIds: string[] = [];
+  const recipeIdByEntry: Array<{ entryId: string; recipeId: string }> = [];
+
+  for (const entry of entries) {
+    if (entry.recipeId === null) {
+      // Freeform meal OR a recipe tombstone (recipe deleted -> recipe_id NULL):
+      // no nutrition data; flag as excluded, never zero-count (AC-5.2).
+      excludedEntryIds.push(entry.id);
+    } else {
+      countedEntryIds.push(entry.id);
+      recipeIdByEntry.push({ entryId: entry.id, recipeId: entry.recipeId });
+    }
+  }
+
+  const total = emptyMacroTotal();
+
+  if (recipeIdByEntry.length > 0) {
+    const recipeIds = Array.from(
+      new Set(recipeIdByEntry.map((r) => r.recipeId)),
+    );
+
+    // Load the servings for every referenced recipe and the ingredient usage
+    // joined to the ingredient's per-`referenceGrams` nutrition + conversion
+    // data, all workspace-scoped. Parameterized Drizzle queries (S-4).
+    const recipeRows = await db
+      .select({ id: recipes.id, servings: recipes.servings })
+      .from(recipes)
+      .where(
+        and(
+          eq(recipes.workspaceId, workspaceId),
+          inArray(recipes.id, recipeIds),
+        ),
+      );
+    const servingsByRecipe = new Map(
+      recipeRows.map((r) => [r.id, r.servings]),
+    );
+
+    const usageRows = await db
+      .select({
+        recipeId: recipeIngredients.recipeId,
+        quantity: recipeIngredients.quantity,
+        unitCode: recipeIngredients.unitCode,
+        ingredient: ingredients,
+      })
+      .from(recipeIngredients)
+      .innerJoin(
+        ingredients,
+        eq(recipeIngredients.ingredientId, ingredients.id),
+      )
+      .where(inArray(recipeIngredients.recipeId, recipeIds))
+      .orderBy(asc(recipeIngredients.position));
+
+    // Group the engine lines by recipe id.
+    const linesByRecipe = new Map<string, NutritionLine[]>();
+    for (const row of usageRows) {
+      const list = linesByRecipe.get(row.recipeId) ?? [];
+      list.push({
+        quantity: Number(row.quantity),
+        unitCode: row.unitCode,
+        ingredient: {
+          id: row.ingredient.id,
+          referenceGrams: Number(row.ingredient.referenceGrams),
+          gramEquivalents: row.ingredient.unitGramEquivalents,
+          gramWeightPerQty:
+            row.ingredient.gramWeightPerQty === null
+              ? null
+              : Number(row.ingredient.gramWeightPerQty),
+          nutrition: toEngineNutrition(row.ingredient),
+          absentMacros: absentMacrosOf(row.ingredient),
+        },
+      });
+      linesByRecipe.set(row.recipeId, list);
+    }
+
+    // Per-serving nutrition per recipe is computed once (full precision) and
+    // cached, then added once PER PLANNED ENTRY: the same recipe planned twice
+    // in a week contributes twice. Sum the UNROUNDED per-serving macros (F-20).
+    const perServingByRecipe = new Map<string, Nutrition>();
+    for (const recipeId of recipeIds) {
+      const lines = linesByRecipe.get(recipeId) ?? [];
+      const servings = servingsByRecipe.get(recipeId) ?? 1;
+      perServingByRecipe.set(
+        recipeId,
+        computeRecipeNutrition(lines, servings).perServing,
+      );
+    }
+
+    for (const { recipeId } of recipeIdByEntry) {
+      const perServing = perServingByRecipe.get(recipeId);
+      if (!perServing) continue;
+      total.calories += perServing.calories;
+      total.proteinG += perServing.proteinG;
+      total.carbsG += perServing.carbsG;
+      total.fatG += perServing.fatG;
+      total.fiberG += perServing.fiberG;
+    }
+  }
+
+  // Round ONCE at the boundary (S-5); drop the micronutrient map - macros only.
+  const rounded = formatNutrition(total);
+  return {
+    weekStartDate,
+    totals: {
+      calories: rounded.calories,
+      proteinG: rounded.proteinG,
+      carbsG: rounded.carbsG,
+      fatG: rounded.fatG,
+      fiberG: rounded.fiberG,
+    },
+    countedEntryIds,
+    excludedEntryIds,
   };
 }
 
@@ -225,6 +431,31 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
       });
     }
     return reply.code(204).send();
+  });
+
+  // GET /plans/summary?weekStart= - the weekly macros summary (FR-5, AD-6).
+  // Registered as its own literal path; there is no GET /plans/:id route, so no
+  // wildcard collision. Macros only; freeform/tombstones flagged excluded.
+  app.get('/plans/summary', async (request, reply) => {
+    const parsedQuery = planQuerySchema.safeParse(request.query);
+    if (!parsedQuery.success) {
+      return reply.code(400).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message:
+            parsedQuery.error.issues[0]?.message ?? 'Invalid query parameters',
+        },
+      });
+    }
+
+    const workspaceId = await resolveWorkspaceId(db);
+    // Normalize to the Monday so any in-week date returns the right week (AD-2).
+    const weekStartDate = normalizeToMonday(parsedQuery.data.weekStart);
+
+    const summary = await computeWeeklySummary(db, workspaceId, weekStartDate);
+    // Validate the response against the shared schema before sending (S-1).
+    const body = weeklySummarySchema.parse(summary);
+    return reply.code(200).send(body);
   });
 
   app.get('/plans', async (request, reply) => {

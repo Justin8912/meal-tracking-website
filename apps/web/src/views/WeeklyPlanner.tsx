@@ -11,6 +11,7 @@ import {
 import { useRecipes } from '../query/recipes.js';
 import { PlannedMealDetail } from '../components/PlannedMealDetail.js';
 import { WeekGrid } from '../components/WeekGrid.js';
+import { WeeklyNutritionSummary } from '../components/WeeklyNutritionSummary.js';
 
 /**
  * Weekly Planner view (FR-1, AD-4). Fills the platform's /planner placeholder
@@ -530,6 +531,18 @@ export function WeeklyPlanner(): JSX.Element {
       ) : (
         week
       )}
+
+      {/* Weekly macros summary (FR-5, AD-6). Shown once the week's plan has
+          loaded so the excluded-meal names can be resolved from `entries`; the
+          macro totals come from the server's shared-engine aggregation on
+          unrounded per-serving values (AC-5.1), and freeform/tombstone meals are
+          flagged as not counted (AC-5.2). */}
+      {!isLoading && !isError ? (
+        <WeeklyNutritionSummary
+          weekStart={weekStart}
+          entries={entries ?? []}
+        />
+      ) : null}
     </section>
   );
 }

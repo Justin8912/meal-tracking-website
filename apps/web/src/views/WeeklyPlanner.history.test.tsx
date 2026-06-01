@@ -46,7 +46,24 @@ describe('WeeklyPlanner history retained across navigation (AC-3.3)', () => {
     const fetchesPerWeek = new Map<string, number>();
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const url = typeof input === 'string' ? input : String(input);
-      const weekStart = new URL(url, 'http://x').searchParams.get('weekStart')!;
+      const parsed = new URL(url, 'http://x');
+      const weekStart = parsed.searchParams.get('weekStart')!;
+      // The weekly summary (GET /plans/summary) also fetches per week; this
+      // test counts the PLAN-LIST reads only, so route the summary to its own
+      // (macros-only) body and leave the per-week plan-fetch count untouched.
+      if (parsed.pathname.endsWith('/plans/summary')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              weekStartDate: weekStart,
+              totals: { calories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 },
+              countedEntryIds: [],
+              excludedEntryIds: [`id-${weekStart}`],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        );
+      }
       fetchesPerWeek.set(weekStart, (fetchesPerWeek.get(weekStart) ?? 0) + 1);
       return Promise.resolve(
         new Response(
