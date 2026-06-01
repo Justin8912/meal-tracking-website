@@ -155,6 +155,81 @@ export interface RecipeDetail extends Recipe {
   tags: string[];
 }
 
+/** The four meal slots a planned meal can occupy in the weekly grid (AD-1). */
+export type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
+/**
+ * The payload accepted by POST /plans (FR-1, AD-3). A planned meal is EITHER a
+ * reference to a saved recipe (`recipeId`) OR a freeform meal
+ * (`freeformTitle` + optional description/link) - never both or neither (the
+ * XOR rule, enforced by `planEntryInputSchema` and the DB CHECK in 0003).
+ *
+ * `weekStart` is any date within the target week; the server normalizes it to
+ * the Monday DATE (AD-2, S-4). `dayOfWeek` is 0 (Monday) .. 6 (Sunday).
+ */
+export interface PlanEntryInput {
+  /** Any date in the target week (YYYY-MM-DD); normalized to the Monday server-side. */
+  weekStart: string;
+  /** 0 (Monday) .. 6 (Sunday). */
+  dayOfWeek: number;
+  mealSlot: MealSlot;
+  /** Optional ordering within a day/slot; defaults to 0 server-side. */
+  position?: number;
+  /** Set for a recipe-backed meal (XOR with freeformTitle). */
+  recipeId?: string;
+  /** Set for a freeform meal (XOR with recipeId). */
+  freeformTitle?: string;
+  freeformDescription?: string | null;
+  freeformLink?: string | null;
+}
+
+/**
+ * A persisted plan entry as returned by the API (contracts.md). Exactly one of
+ * {`recipeId`} / {`freeformTitle`} is present. After the referenced recipe is
+ * deleted in recipe-library, `recipeId` becomes null (tombstone, ON DELETE SET
+ * NULL - AD-3) and the entry carries no freeform fields; the UI renders a
+ * "recipe removed" state.
+ */
+export interface PlanEntry {
+  id: string;
+  /** The Monday DATE of the week (YYYY-MM-DD), computed server-side (AD-2). */
+  weekStartDate: string;
+  /** 0 (Monday) .. 6 (Sunday). */
+  dayOfWeek: number;
+  mealSlot: MealSlot;
+  position: number;
+  /** null after the referenced recipe is deleted (tombstone, AD-3). */
+  recipeId: string | null;
+  /** Convenience display name for a recipe-backed entry; absent/optional otherwise. */
+  recipeName?: string;
+  freeformTitle: string | null;
+  freeformDescription: string | null;
+  freeformLink: string | null;
+}
+
+/**
+ * The weekly macros summary (FR-5, AD-6; GET /plans/summary). Macros only -
+ * %DV/micronutrients are not summable across ingredients (S-5). Freeform meals
+ * and recipe tombstones carry no nutrition and are reported as excluded so the
+ * UI can state what is not counted (AC-5.2). The summary endpoint itself lands
+ * in a later bundle; the type is defined here as the shared contract.
+ */
+export interface WeeklySummary {
+  /** The Monday DATE of the week (YYYY-MM-DD). */
+  weekStartDate: string;
+  totals: {
+    calories: number;
+    proteinG: number;
+    carbsG: number;
+    fatG: number;
+    fiberG: number;
+  };
+  /** Ids of the recipe-based entries counted in the totals. */
+  countedEntryIds: string[];
+  /** Ids of freeform meals + recipe tombstones excluded from the totals (AC-5.2). */
+  excludedEntryIds: string[];
+}
+
 /**
  * The shared error envelope returned for every non-2xx API response
  * (references/contracts.md). Feature specs reuse this shape so the frontend

@@ -3,6 +3,7 @@ export type {
   Unit,
   ErrorEnvelope,
   MealType,
+  MealSlot,
   Micronutrient,
   Nutrition,
   Ingredient,
@@ -12,6 +13,9 @@ export type {
   Tag,
   RecipeDetailIngredient,
   RecipeDetail,
+  PlanEntryInput,
+  PlanEntry,
+  WeeklySummary,
 } from './types.js';
 export {
   workspaceSchema,
@@ -28,4 +32,6 @@ export {
   tagInputSchema,
   recipeDetailIngredientSchema,
   recipeDetailSchema,
+  mealSlotSchema,
+  planEntryInputSchema,
 } from './schemas.js';

@@ -4,6 +4,7 @@ import type {
   Unit,
   ErrorEnvelope,
   MealType,
+  MealSlot,
   Micronutrient,
   Nutrition,
   RecipeIngredient,
@@ -129,3 +130,43 @@ export const recipeDetailSchema = recipeSchema.extend({
   ingredients: z.array(recipeDetailIngredientSchema),
   tags: z.array(z.string().min(1)),
 }) satisfies z.ZodType<RecipeDetail>;
+
+/** The four meal slots; mirrors the plan_entries.meal_slot CHECK in 0003. */
+export const mealSlotSchema = z.enum([
+  'breakfast',
+  'lunch',
+  'dinner',
+  'snack',
+]) satisfies z.ZodType<MealSlot>;
+
+/**
+ * POST /plans request body (FR-1, AD-3, S-1). `weekStart` is any date in the
+ * target week as YYYY-MM-DD; the server normalizes it to the Monday DATE (AD-2,
+ * S-4). `dayOfWeek` is pinned to 0..6 (Monday..Sunday) and `mealSlot` to the
+ * four-slot enum.
+ *
+ * The `.refine()` enforces the recipe/freeform XOR (AD-3): exactly one of
+ * {`recipeId`} / {`freeformTitle`} must be present, never both or neither. This
+ * is the contract-level guard that mirrors the DB-level XOR CHECK in 0003, so a
+ * malformed plan body is rejected before it ever reaches the route.
+ */
+export const planEntryInputSchema = z
+  .object({
+    // A calendar date, not a timestamp; the server derives the Monday from it.
+    weekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'weekStart must be YYYY-MM-DD'),
+    dayOfWeek: z.number().int().min(0).max(6),
+    mealSlot: mealSlotSchema,
+    position: z.number().int().min(0).optional(),
+    recipeId: z.string().uuid().optional(),
+    freeformTitle: z.string().trim().min(1).optional(),
+    freeformDescription: z.string().nullish(),
+    freeformLink: z.string().nullish(),
+  })
+  .refine(
+    (v) => (v.recipeId != null) !== (v.freeformTitle != null),
+    {
+      message:
+        'A plan entry must reference exactly one of a recipeId or a freeformTitle',
+      path: ['recipeId'],
+    },
+  );
