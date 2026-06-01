@@ -71,11 +71,14 @@ export async function buildServer(
   });
 
   // CORS must be registered before the routes so the browser SPA (served from a
-  // different origin than the API) can call it cross-origin (AD-5). Only the
-  // configured web origin is allowed; credentials are not used (no cookies, the
-  // SPA holds no session), and the methods/headers match what the API serves.
+  // different origin than the API) can call it cross-origin (AD-5). The default
+  // is permissive ("*" -> reflect any Origin) so the app works from localhost,
+  // 127.0.0.1, a LAN IP, or a hostname without per-host config; set CORS_ORIGIN
+  // to a specific URL to lock it down. Credentials are not used (no cookies, the
+  // SPA holds no session), so reflecting any origin is safe here.
+  const corsOrigin = options.corsOrigin ?? '*';
   await app.register(cors, {
-    origin: options.corsOrigin ?? 'http://localhost:8080',
+    origin: corsOrigin === '*' ? true : corsOrigin,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type'],
     credentials: false,

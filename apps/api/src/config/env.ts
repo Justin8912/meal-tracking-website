@@ -33,9 +33,15 @@ const envSchema = z.object({
   USDA_BASE_URL: z.string().url().default('https://api.nal.usda.gov/fdc/v1'),
   // Browser origin allowed to call the API cross-origin (AD-5). The SPA is
   // served from a different origin (nginx :8080) than the API (:3000), so the
-  // browser enforces CORS; this configures the single allowed Origin. Defaults
-  // to the local Compose web origin so it works out of the box.
-  CORS_ORIGIN: z.string().url().default('http://localhost:8080'),
+  // browser enforces CORS. Defaults to "*" (reflect any Origin) so the app works
+  // from localhost, 127.0.0.1, a LAN IP, or a hostname without per-host config;
+  // set it to a specific http(s) URL to lock it down.
+  CORS_ORIGIN: z
+    .string()
+    .refine((v) => v === '*' || /^https?:\/\//.test(v), {
+      message: 'CORS_ORIGIN must be "*" or an http(s) URL',
+    })
+    .default('*'),
 });
 
 export interface AppConfig {

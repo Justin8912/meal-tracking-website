@@ -22,11 +22,11 @@ describe('loadConfig', () => {
     expect(() => loadConfig({})).toThrowError(/DATABASE_URL/);
   });
 
-  it('defaults CORS_ORIGIN to the local web origin when not set', () => {
+  it('defaults CORS_ORIGIN to "*" (allow any origin) when not set', () => {
     const config = loadConfig({
       DATABASE_URL: 'postgres://user:pass@localhost:5432/db',
     });
-    expect(config.corsOrigin).toBe('http://localhost:8080');
+    expect(config.corsOrigin).toBe('*');
   });
 
   it('reads CORS_ORIGIN from the environment when set', () => {

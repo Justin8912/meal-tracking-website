@@ -51,14 +51,17 @@ describe('CORS (browser SPA calls the API cross-origin, AD-5)', () => {
     expect(res.headers['access-control-allow-methods']).toContain('POST');
   });
 
-  it('defaults the allowed origin to the local web origin when none is configured', async () => {
+  it('reflects any Origin by default (allow-all) when none is configured', async () => {
     app = await buildServer({ databaseUrl: UNUSED_DB_URL });
     await app.ready();
 
+    // Default CORS_ORIGIN is "*" -> reflect any origin, so the app works from
+    // any host (localhost, 127.0.0.1, a LAN IP) without per-host config.
+    const arbitraryOrigin = 'http://192.168.1.50:8080';
     const res = await request(app.server)
       .get('/api/v1/__cors_probe__')
-      .set('Origin', 'http://localhost:8080');
+      .set('Origin', arbitraryOrigin);
 
-    expect(res.headers['access-control-allow-origin']).toBe('http://localhost:8080');
+    expect(res.headers['access-control-allow-origin']).toBe(arbitraryOrigin);
   });
 });
