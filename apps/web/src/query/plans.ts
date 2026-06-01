@@ -1,5 +1,11 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import type { PlanEntry } from '@meal-tracking/shared';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult,
+  type UseQueryResult,
+} from '@tanstack/react-query';
+import type { PlanEntry, PlanEntryInput } from '@meal-tracking/shared';
 import { apiFetch } from '../api/client.js';
 
 /**
@@ -36,5 +42,70 @@ export function useWeekPlan(
   return useQuery({
     queryKey: planQueryKey(weekStart),
     queryFn: () => fetchWeekPlan(weekStart),
+  });
+}
+
+/**
+ * Persist a plan entry. A `planEntryId` routes to PUT /plans/:id (edit),
+ * otherwise POST /plans (add). The body is the shared PlanEntryInput contract
+ * incl. the recipe/freeform XOR (S-1); the server normalizes weekStart to the
+ * Monday and re-validates the XOR.
+ */
+async function savePlanEntry(
+  input: PlanEntryInput,
+  planEntryId?: string,
+): Promise<PlanEntry> {
+  const path = planEntryId ? `/api/v1/plans/${planEntryId}` : '/api/v1/plans';
+  return apiFetch<PlanEntry>(path, {
+    method: planEntryId ? 'PUT' : 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+/** Arguments accepted by the save mutation (add vs edit by `planEntryId`). */
+export interface SavePlanEntryArgs {
+  input: PlanEntryInput;
+  planEntryId?: string;
+}
+
+/**
+ * Mutation hook to add/edit a plan entry (AD-4, F-4). On success it invalidates
+ * every `['plan', ...]` query so the affected week refetches and the new/edited
+ * meal appears (AC-1.3/AC-1.4) regardless of which week is active. On error the
+ * mutation's `error` is surfaced by the caller as a clear "not saved" message
+ * (AC-1.6); the caller keeps the in-progress entry so nothing is silently lost.
+ */
+export function useSavePlanEntry(): UseMutationResult<
+  PlanEntry,
+  Error,
+  SavePlanEntryArgs
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ input, planEntryId }: SavePlanEntryArgs) =>
+      savePlanEntry(input, planEntryId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['plan'] });
+    },
+  });
+}
+
+/** Remove a plan entry via DELETE /plans/:id. */
+async function deletePlanEntry(planEntryId: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/plans/${planEntryId}`, { method: 'DELETE' });
+}
+
+/**
+ * Mutation hook to remove a plan entry (AD-4, AC-1.4). On success it
+ * invalidates every `['plan', ...]` query so the week refetches without the
+ * removed meal. A delete failure surfaces via the mutation's `error` (AC-1.6).
+ */
+export function useDeletePlanEntry(): UseMutationResult<void, Error, string> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (planEntryId: string) => deletePlanEntry(planEntryId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['plan'] });
+    },
   });
 }

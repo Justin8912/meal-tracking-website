@@ -1,15 +1,30 @@
-import type { PlanEntry } from '@meal-tracking/shared';
-import { useWeekPlan } from '../query/plans.js';
+import { useState, type FormEvent } from 'react';
+import type { MealSlot, PlanEntry, PlanEntryInput } from '@meal-tracking/shared';
+import { planEntryInputSchema } from '@meal-tracking/shared';
+import { ApiError } from '../api/client.js';
+import {
+  useWeekPlan,
+  useSavePlanEntry,
+  useDeletePlanEntry,
+} from '../query/plans.js';
 
 /**
  * Weekly Planner view (FR-1, AD-4). Fills the platform's /planner placeholder
- * and proves the web->api read path.
+ * and proves the web->api round-trip for the full plan-entry write surface.
  *
  * The week's plan is read through the useWeekPlan TanStack Query hook keyed by
  * the week's Monday DATE (AD-4), so Bundle 3 navigation reuses the cache rather
  * than a one-off fetch. The grid renders all seven days Monday..Sunday (AC-1.1)
  * even when empty; loading and empty-day states are explicit so the view is
- * never a blank screen. No emojis (S-7).
+ * never a blank screen (AC-1.5).
+ *
+ * Each day cell offers adding a freeform meal (title + optional description/
+ * link) and editing/removing an existing meal, wired through the
+ * useSavePlanEntry / useDeletePlanEntry mutations keyed to the active week
+ * (AD-4). On a save failure the form shows a clear "change not saved" error and
+ * KEEPS the in-progress entry visible so nothing is silently lost (AC-1.6). The
+ * recipe-select add path and the explicit empty/add affordance land in STEP-10.
+ * No emojis (S-7).
  *
  * The current week's Monday is computed client-side here; the server also
  * normalizes weekStart to the Monday (AD-2), so the two agree. Week navigation
@@ -26,6 +41,9 @@ const DAY_LABELS = [
   'Saturday',
   'Sunday',
 ] as const;
+
+/** The four meal slots a planned meal can occupy (AD-1). */
+const MEAL_SLOTS: MealSlot[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 /**
  * The Monday DATE (YYYY-MM-DD) of the week containing `from`, computed at UTC so
@@ -54,6 +72,215 @@ function entryLabel(entry: PlanEntry): string {
   return 'Recipe removed';
 }
 
+/**
+ * A freeform add/edit form for a single day. Holds the title/description/link
+ * and the meal slot in local state; on submit it validates against the shared
+ * Zod schema (S-1) and calls the week-keyed save mutation. On a mutation error
+ * it shows a clear "change not saved" message and KEEPS the typed values so the
+ * user's in-progress entry is never lost (AC-1.6).
+ */
+function DayMealForm({
+  weekStart,
+  dayOfWeek,
+  entry,
+  onDone,
+}: {
+  weekStart: string;
+  dayOfWeek: number;
+  /** When editing an existing freeform entry; absent when adding. */
+  entry?: PlanEntry;
+  onDone: () => void;
+}): JSX.Element {
+  const [title, setTitle] = useState(entry?.freeformTitle ?? '');
+  const [description, setDescription] = useState(
+    entry?.freeformDescription ?? '',
+  );
+  const [link, setLink] = useState(entry?.freeformLink ?? '');
+  const [mealSlot, setMealSlot] = useState<MealSlot>(
+    entry?.mealSlot ?? 'breakfast',
+  );
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const save = useSavePlanEntry();
+
+  function handleSubmit(event: FormEvent): void {
+    event.preventDefault();
+    setFormError(null);
+
+    const candidate: PlanEntryInput = {
+      weekStart,
+      dayOfWeek,
+      mealSlot,
+      freeformTitle: title.trim(),
+      freeformDescription: description.trim() === '' ? null : description.trim(),
+      freeformLink: link.trim() === '' ? null : link.trim(),
+    };
+
+    // Validate against the shared schema (incl. XOR) before the network call so
+    // an obvious problem is surfaced inline rather than as a 400 (S-1).
+    const parsed = planEntryInputSchema.safeParse(candidate);
+    if (!parsed.success) {
+      setFormError(parsed.error.issues[0]?.message ?? 'Meal is invalid');
+      return;
+    }
+
+    save.mutate(
+      { input: parsed.data, planEntryId: entry?.id },
+      {
+        // Only close on success; on error the form stays open with the typed
+        // values intact (AC-1.6) so the in-progress entry is not lost.
+        onSuccess: () => onDone(),
+      },
+    );
+  }
+
+  const saveErrorMessage =
+    save.error instanceof ApiError
+      ? save.error.message
+      : save.error?.message ?? null;
+
+  return (
+    <form
+      aria-label={entry ? 'Edit meal' : 'Add meal'}
+      onSubmit={handleSubmit}
+    >
+      <label>
+        Title
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+      </label>
+      <label>
+        Meal slot
+        <select
+          value={mealSlot}
+          onChange={(e) => setMealSlot(e.target.value as MealSlot)}
+        >
+          {MEAL_SLOTS.map((slot) => (
+            <option key={slot} value={slot}>
+              {slot}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Description
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </label>
+      <label>
+        Link
+        <input
+          type="url"
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+        />
+      </label>
+
+      {formError ? <p role="alert">{formError}</p> : null}
+      {saveErrorMessage ? (
+        <p role="alert">Change not saved: {saveErrorMessage}</p>
+      ) : null}
+
+      <button type="submit" disabled={save.isPending}>
+        {save.isPending ? 'Saving...' : 'Save meal'}
+      </button>
+      <button type="button" onClick={onDone} disabled={save.isPending}>
+        Cancel
+      </button>
+    </form>
+  );
+}
+
+/** The contents of a single day cell: its meals plus the add/edit/remove affordances. */
+function DayCell({
+  label,
+  weekStart,
+  dayOfWeek,
+  entries,
+}: {
+  label: string;
+  weekStart: string;
+  dayOfWeek: number;
+  entries: PlanEntry[];
+}): JSX.Element {
+  // Which UI is open: 'none', the add form, or an edit form for a given entry.
+  const [mode, setMode] = useState<
+    { kind: 'none' } | { kind: 'add' } | { kind: 'edit'; entry: PlanEntry }
+  >({ kind: 'none' });
+  const remove = useDeletePlanEntry();
+
+  return (
+    <li aria-label={label} className="weekly-planner__day">
+      <h2>{label}</h2>
+
+      {entries.length === 0 ? (
+        // An empty day shows an explicit empty/add state, never a blank cell
+        // (AC-1.5).
+        <p className="weekly-planner__empty">No meals planned</p>
+      ) : (
+        <ul aria-label={`${label} meals`}>
+          {entries.map((entry) => {
+            // Only freeform entries are editable inline in this bundle; recipe
+            // tombstones/refs are display-only here.
+            const editable = entry.freeformTitle != null;
+            return (
+              <li key={entry.id}>
+                <span>{entryLabel(entry)}</span>
+                <span> ({entry.mealSlot})</span>
+                {editable ? (
+                  <button
+                    type="button"
+                    onClick={() => setMode({ kind: 'edit', entry })}
+                  >
+                    Edit
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => remove.mutate(entry.id)}
+                  disabled={remove.isPending}
+                >
+                  Remove
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {remove.error ? (
+        <p role="alert">
+          Change not saved: {remove.error.message}
+        </p>
+      ) : null}
+
+      {mode.kind === 'none' ? (
+        <button type="button" onClick={() => setMode({ kind: 'add' })}>
+          Add meal
+        </button>
+      ) : mode.kind === 'add' ? (
+        <DayMealForm
+          weekStart={weekStart}
+          dayOfWeek={dayOfWeek}
+          onDone={() => setMode({ kind: 'none' })}
+        />
+      ) : (
+        <DayMealForm
+          weekStart={weekStart}
+          dayOfWeek={dayOfWeek}
+          entry={mode.entry}
+          onDone={() => setMode({ kind: 'none' })}
+        />
+      )}
+    </li>
+  );
+}
+
 export function WeeklyPlanner(): JSX.Element {
   const weekStart = mondayOf(new Date());
   const { data: entries, isLoading, isError, error } = useWeekPlan(weekStart);
@@ -79,26 +306,15 @@ export function WeeklyPlanner(): JSX.Element {
         </p>
       ) : (
         <ol aria-label="Days of the week" className="weekly-planner__week">
-          {DAY_LABELS.map((label, dayOfWeek) => {
-            const dayEntries = byDay.get(dayOfWeek) ?? [];
-            return (
-              <li key={label} aria-label={label} className="weekly-planner__day">
-                <h2>{label}</h2>
-                {dayEntries.length === 0 ? (
-                  <p className="weekly-planner__empty">No meals planned</p>
-                ) : (
-                  <ul aria-label={`${label} meals`}>
-                    {dayEntries.map((entry) => (
-                      <li key={entry.id}>
-                        <span>{entryLabel(entry)}</span>
-                        <span> ({entry.mealSlot})</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            );
-          })}
+          {DAY_LABELS.map((label, dayOfWeek) => (
+            <DayCell
+              key={label}
+              label={label}
+              weekStart={weekStart}
+              dayOfWeek={dayOfWeek}
+              entries={byDay.get(dayOfWeek) ?? []}
+            />
+          ))}
         </ol>
       )}
     </section>
