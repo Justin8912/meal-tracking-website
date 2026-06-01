@@ -50,7 +50,16 @@ export function createDbHandle(databaseUrl: string): DbHandle {
 let handle: DbHandle | undefined;
 
 function getHandle(): DbHandle {
-  if (!handle) {
+  // Recreate the singleton if it was never built OR if its pool has been ended
+  // (pg sets `ending`/`ended` after pool.end()). The latter guards a cross-file
+  // race in the test suite: each DB test file's afterAll calls closeDb() on the
+  // process-wide singleton, and `fileParallelism:false` only serializes file
+  // start, not teardown - so a later file can call getDb() against a pool that
+  // a prior file's afterAll just ended. Detecting the ended pool and rebuilding
+  // transparently makes the shared client robust to that ordering. In
+  // production closeDb() runs only on shutdown, so this never recreates there.
+  const pool = handle?.pool as (pg.Pool & { ending?: boolean; ended?: boolean }) | undefined;
+  if (!handle || pool?.ending || pool?.ended) {
     handle = createDbHandle(getConfig().databaseUrl);
   }
   return handle;
