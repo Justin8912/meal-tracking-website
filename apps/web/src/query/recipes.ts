@@ -133,3 +133,22 @@ export function useSaveRecipe(): UseMutationResult<
     },
   });
 }
+
+/** Send DELETE /recipes/:id to remove a recipe (AC-1.3). */
+async function deleteRecipe(recipeId: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/recipes/${recipeId}`, { method: 'DELETE' });
+}
+
+/**
+ * Mutation hook to delete a recipe (AC-1.3). On success it invalidates the
+ * recipe list so the library refetches without the deleted recipe.
+ */
+export function useDeleteRecipe(): UseMutationResult<void, Error, string> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteRecipe,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['recipes'] });
+    },
+  });
+}

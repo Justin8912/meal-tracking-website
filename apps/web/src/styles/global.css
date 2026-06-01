@@ -409,38 +409,128 @@ label {
   margin: 0;
 }
 
-/* The recipe list (a <ul aria-label="Recipes">): rows with a bottom border that
-   tuck into the card, hover-highlighted (prototype list rows). */
-[aria-label='Recipes'] {
+/* ── Recipe list rows (expandable, prototype-style) ───────────────────────── */
+.recipe-list {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-[aria-label='Recipes'] > li {
+.recipe-row {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.2s;
+}
+
+.recipe-row:last-child {
+  border-bottom: none;
+}
+
+.recipe-row--expanded {
+  background: var(--card-alt);
+}
+
+/* The clickable header row: name on the left, meta (meal-type chip, servings,
+   chevron) on the right. Mimics the prototype's list row layout. */
+.recipe-row__header {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 14px 24px;
-  border-bottom: 1px solid var(--border);
-  transition: background 0.2s;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
 }
 
-[aria-label='Recipes'] > li:hover {
+.recipe-row__header:hover {
   background: var(--card-alt);
 }
 
-[aria-label='Recipes'] > li > span:first-child {
+.recipe-row__name {
   font-family: var(--font-heading);
   font-size: 15px;
   font-weight: 500;
+  color: var(--dark);
 }
 
-[aria-label='Recipes'] > li > span:last-child {
-  font-size: 12px;
+.recipe-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.recipe-row__servings {
+  font-size: 11px;
   color: var(--light);
-  text-transform: capitalize;
+}
+
+.recipe-row__chevron {
+  font-size: 10px;
+  color: var(--light);
+}
+
+/* Expanded detail panel inside a row */
+.recipe-row__detail {
+  padding: 4px 24px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recipe-row__section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 4px;
+}
+
+.recipe-row__ingredients ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recipe-row__ingredients li {
+  font-size: 13px;
+  color: var(--med);
+}
+
+.recipe-row__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.recipe-row__notes p {
+  font-size: 13px;
+  color: var(--med);
+  background: var(--card-alt);
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--chip-bg);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.recipe-row__link a {
+  font-size: 13px;
+  color: var(--med);
+  text-decoration: underline;
+}
+
+.recipe-row__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 /* Status / error / empty messaging. */
