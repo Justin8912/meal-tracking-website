@@ -27,6 +27,15 @@ export interface DbHandle {
  */
 export function createDbHandle(databaseUrl: string): DbHandle {
   const pool = new Pool({ connectionString: databaseUrl });
+  // An idle pg client can emit an async 'error' (e.g. an unreachable host, or a
+  // connection dying as the pool is torn down). Without a listener pg promotes
+  // it to an unhandledRejection that can surface against an unrelated later
+  // operation (notably across test files that share the process). Swallowing it
+  // here is safe: query-path failures still reject their own promise and are
+  // handled by the caller / global error handler (AC-1.5).
+  pool.on('error', () => {
+    /* intentionally ignored: handled at the query call site */
+  });
   const db = drizzle(pool, { schema });
   return {
     pool,
