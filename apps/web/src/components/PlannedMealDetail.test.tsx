@@ -11,6 +11,11 @@ import type { ReactElement } from 'react';
 import type { PlanEntry } from '@meal-tracking/shared';
 import { computeRecipeNutrition, formatNutrition } from '@meal-tracking/nutrition-engine';
 import type { NutritionLine } from '@meal-tracking/nutrition-engine';
+import {
+  toEngineNutrition,
+  absentMacrosOf,
+  type SavedIngredient,
+} from '../query/ingredients.js';
 import { PlannedMealDetail } from './PlannedMealDetail.js';
 
 /**
@@ -162,12 +167,11 @@ const INGREDIENT_LIST = [
  * rounded number — it asserts the component agrees with the shared engine.
  */
 function expectedPerServing(): ReturnType<typeof formatNutrition> {
-  const byId = new Map(INGREDIENT_LIST.map((i) => [i.id, i]));
+  const byId = new Map(
+    (INGREDIENT_LIST as SavedIngredient[]).map((i) => [i.id, i]),
+  );
   const lines: NutritionLine[] = RECIPE_DETAIL.ingredients.map((ri) => {
     const ing = byId.get(ri.ingredientId)!;
-    const n = ing.nutrition as Record<string, number | undefined> & {
-      micronutrients: Record<string, never>;
-    };
     return {
       quantity: ri.quantity,
       unitCode: ri.unitCode,
@@ -176,14 +180,8 @@ function expectedPerServing(): ReturnType<typeof formatNutrition> {
         referenceGrams: ing.referenceGrams,
         gramEquivalents: ing.unitGramEquivalents,
         gramWeightPerQty: ing.gramWeightPerQty,
-        nutrition: {
-          calories: n.calories ?? 0,
-          proteinG: n.proteinG ?? 0,
-          carbsG: n.carbsG ?? 0,
-          fatG: n.fatG ?? 0,
-          fiberG: n.fiberG ?? 0,
-          micronutrients: ing.nutrition.micronutrients,
-        },
+        nutrition: toEngineNutrition(ing.nutrition),
+        absentMacros: absentMacrosOf(ing.nutrition),
       },
     };
   });

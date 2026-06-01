@@ -5,7 +5,7 @@ import {
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
-import type { Recipe, RecipeInput } from '@meal-tracking/shared';
+import type { Recipe, RecipeDetail, RecipeInput } from '@meal-tracking/shared';
 import { apiFetch } from '../api/client.js';
 
 /**
@@ -55,6 +55,39 @@ export function useRecipes(
   return useQuery({
     queryKey: recipesQueryKey(filters),
     queryFn: () => fetchRecipes(filters),
+  });
+}
+
+/**
+ * Query key for a single recipe's detail: `['recipe', recipeId]`. Distinct from
+ * the list key so a recipe-by-id read (e.g. the planner's planned-meal detail)
+ * is cached and deduped independently and shared across views (AD-4/AD-5).
+ */
+export function recipeDetailQueryKey(
+  recipeId: string,
+): readonly ['recipe', string] {
+  return ['recipe', recipeId] as const;
+}
+
+/** Fetch a single recipe's hydrated detail (usage + tags) from GET /recipes/:id. */
+async function fetchRecipeDetail(recipeId: string): Promise<RecipeDetail> {
+  return apiFetch<RecipeDetail>(`/api/v1/recipes/${recipeId}`);
+}
+
+/**
+ * Query hook for one recipe's detail (GET /recipes/:id), keyed by id (AD-4). The
+ * planner's planned-meal detail composes this recipe usage with the ingredient
+ * nutrition (useIngredients) and the shared engine to show a recipe-backed
+ * meal's nutrition without duplicating nutrition logic or adding an endpoint
+ * (FR-2, AD-4). `enabled` lets the caller skip the fetch for a non-recipe meal.
+ */
+export function useRecipeDetail(
+  recipeId: string | null | undefined,
+): UseQueryResult<RecipeDetail, Error> {
+  return useQuery({
+    queryKey: recipeDetailQueryKey(recipeId ?? ''),
+    queryFn: () => fetchRecipeDetail(recipeId as string),
+    enabled: recipeId != null && recipeId !== '',
   });
 }
 

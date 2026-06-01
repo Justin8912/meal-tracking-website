@@ -100,6 +100,30 @@ export function ingredientSearchKey(q: string): readonly ['ingredient-search', s
   return ['ingredient-search', q] as const;
 }
 
+/** Query key for the workspace's owned ingredient list. */
+export function ingredientsQueryKey(): readonly ['ingredients'] {
+  return ['ingredients'] as const;
+}
+
+/** Fetch the workspace's owned ingredients (per-referenceGrams nutrition + conversions). */
+async function fetchIngredients(): Promise<SavedIngredient[]> {
+  return apiFetch<SavedIngredient[]>('/api/v1/ingredients');
+}
+
+/**
+ * Query hook for the workspace's owned ingredients (GET /ingredients). Each row
+ * carries the per-`referenceGrams` nutrition and conversion data the shared
+ * engine needs. The recipe-detail endpoint carries only usage (ingredientId/
+ * quantity/unit); joining that to this list reproduces a recipe's nutrition
+ * client-side without a new endpoint (the canonical reload flow, AD-4).
+ */
+export function useIngredients(): UseQueryResult<SavedIngredient[], Error> {
+  return useQuery({
+    queryKey: ingredientsQueryKey(),
+    queryFn: fetchIngredients,
+  });
+}
+
 async function searchIngredients(q: string): Promise<UsdaSearchItem[]> {
   return apiFetch<UsdaSearchItem[]>(
     `/api/v1/ingredients/search?q=${encodeURIComponent(q)}`,

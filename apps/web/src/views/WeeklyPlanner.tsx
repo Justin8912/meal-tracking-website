@@ -9,6 +9,7 @@ import {
   shiftWeek,
 } from '../query/plans.js';
 import { useRecipes } from '../query/recipes.js';
+import { PlannedMealDetail } from '../components/PlannedMealDetail.js';
 
 /**
  * Weekly Planner view (FR-1, AD-4). Fills the platform's /planner placeholder
@@ -328,6 +329,9 @@ function DayCell({
     | { kind: 'add-recipe' }
     | { kind: 'edit'; entry: PlanEntry }
   >({ kind: 'none' });
+  // Which entry's detail panel is open (by id), if any. Clicking a meal opens
+  // its detail (FR-2); clicking again closes it.
+  const [openDetailId, setOpenDetailId] = useState<string | null>(null);
   const remove = useDeletePlanEntry();
 
   return (
@@ -344,9 +348,20 @@ function DayCell({
             // Only freeform entries are editable inline in this bundle; recipe
             // tombstones/refs are display-only here.
             const editable = entry.freeformTitle != null;
+            const detailOpen = openDetailId === entry.id;
             return (
               <li key={entry.id}>
-                <span>{entryLabel(entry)}</span>
+                {/* Clicking the meal opens its detail panel (FR-2, AC-2.1/2.2);
+                    clicking again closes it. */}
+                <button
+                  type="button"
+                  aria-expanded={detailOpen}
+                  onClick={() =>
+                    setOpenDetailId((id) => (id === entry.id ? null : entry.id))
+                  }
+                >
+                  {entryLabel(entry)}
+                </button>
                 <span> ({entry.mealSlot})</span>
                 {editable ? (
                   <button
@@ -363,6 +378,7 @@ function DayCell({
                 >
                   Remove
                 </button>
+                {detailOpen ? <PlannedMealDetail entry={entry} /> : null}
               </li>
             );
           })}
