@@ -1,7 +1,8 @@
 # Frontend image (AD-5): multi-stage Vite build -> nginx static server.
 # Build context is the repo root so npm workspaces (apps/web depends on
-# @meal-tracking/shared) resolve. No secrets are used at build time; the API URL
-# is injected at runtime by docker-entrypoint.sh (F-3, S-1) - never a build ARG.
+# @meal-tracking/shared and @meal-tracking/nutrition-engine) resolve. No secrets
+# are used at build time; the API URL is injected at runtime by
+# docker-entrypoint.sh (F-3, S-1) - never a build ARG.
 
 # ---- Stage 1: build the static SPA ----
 FROM node:20-alpine AS build
@@ -10,12 +11,16 @@ WORKDIR /repo
 # Install workspace dependencies using only manifests first for better caching.
 COPY package.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
+COPY packages/nutrition-engine/package.json packages/nutrition-engine/
 COPY apps/web/package.json apps/web/
 COPY apps/api/package.json apps/api/
 RUN npm install
 
-# Copy the sources needed to build the web workspace and its shared dependency.
+# Copy the sources needed to build the web workspace and its workspace deps
+# (@meal-tracking/shared + @meal-tracking/nutrition-engine, resolved to TS source
+# via the "development" export condition during the vite build).
 COPY packages/shared/ packages/shared/
+COPY packages/nutrition-engine/ packages/nutrition-engine/
 COPY apps/web/ apps/web/
 
 RUN npm run build --workspace @meal-tracking/web
