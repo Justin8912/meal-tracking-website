@@ -39,7 +39,7 @@ export function MealLibrary(): JSX.Element {
     mealType !== '' || tag !== '' || debouncedSearch.trim() !== '';
 
   return (
-    <section aria-labelledby="meal-library-heading">
+    <section aria-labelledby="meal-library-heading" className="meal-library">
       <h1 id="meal-library-heading">Meal Library</h1>
 
       <button
