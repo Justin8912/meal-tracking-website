@@ -16,6 +16,15 @@ import type { Nutrition, Micronutrient } from '@meal-tracking/shared';
 export type { Nutrition, Micronutrient };
 
 /**
+ * The five macro keys of a `Nutrition` profile. Used to flag macros that a
+ * source genuinely did not provide (USDA may omit a nutrient; a custom
+ * ingredient may be entered with only some facts) so the engine can surface
+ * them via completeness rather than letting an absent value read as a real 0
+ * (F-5, S-6).
+ */
+export type MacroKey = 'calories' | 'proteinG' | 'carbsG' | 'fatG' | 'fiberG';
+
+/**
  * Per-ingredient conversion data plus the nutrition snapshot the engine scales.
  *
  * - `referenceGrams`: the gram basis the stored `nutrition` is measured against
@@ -38,6 +47,15 @@ export interface NutritionIngredient {
   gramEquivalents: Record<string, number>;
   /** Grams one `qty` (count) of this ingredient weighs; null if unknown. */
   gramWeightPerQty: number | null;
+  /**
+   * Macro keys the source did NOT provide (e.g. USDA returned no fiber, or a
+   * custom ingredient was saved without carbs). The `nutrition` macros must be
+   * numeric for the engine to sum, so an absent macro unavoidably carries a 0
+   * there; this list lets the engine distinguish "genuinely 0" from "unknown"
+   * and flag the line `missing-macros` via completeness rather than silently
+   * understating the total (F-5, S-6). Omitted/empty means every macro is known.
+   */
+  absentMacros?: MacroKey[];
 }
 
 /**

@@ -13,6 +13,7 @@ export { formatNutrition } from './format.js';
 export type {
   Nutrition,
   Micronutrient,
+  MacroKey,
   NutritionIngredient,
   NutritionLine,
   GramResult,

@@ -120,4 +120,50 @@ describe('RecipeEditor live nutrition', () => {
     const caloriesCell = screen.getByLabelText(/per-serving calories/i);
     expect(caloriesCell.textContent).toBe('200');
   });
+
+  /**
+   * STEP-46 (Bundle 5 limitation guard): the editor maps an API-absent macro to
+   * a placeholder 0 for engine arithmetic. That 0 must NOT make the recipe look
+   * complete. With `absentMacros` set on the line, the engine flags it and the
+   * editor shows the panel-level "incomplete" indicator AND a per-line note —
+   * proving missing macros surface via completeness, not as a silent real 0.
+   */
+  it('surfaces incompleteness when an ingredient has an API-absent macro (not a silent 0)', () => {
+    // Identical macro numbers; the ONLY difference is the absentMacros marker.
+    const base = completeLine('a', 200);
+    const absent: EditorIngredientLine = {
+      ...completeLine('b', 300),
+      // calories was never reported by the API: placeholder 0 in nutrition,
+      // recorded as absent so the engine flags it (S-6, F-5).
+      nutrition: { ...completeLine('b', 0).nutrition },
+      absentMacros: ['calories'],
+    };
+
+    renderWithClient(
+      <RecipeEditor initialIngredients={[base, absent]} initialServings={1} />,
+    );
+
+    const panel = screen.getByLabelText(/per-serving nutrition/i);
+    expect(within(panel).getByRole('note').textContent).toMatch(/incomplete/i);
+
+    // The per-line "incomplete data" note appears for the absent-macro line.
+    const list = screen.getByLabelText(/recipe ingredients/i);
+    const notes = within(list).getAllByRole('note');
+    expect(notes.some((n) => /incomplete/i.test(n.textContent ?? ''))).toBe(
+      true,
+    );
+  });
+
+  it('does NOT flag a genuine 0 macro as incomplete (no absentMacros marker)', () => {
+    // Same shape as above but the 0 is a KNOWN value: no absentMacros, so the
+    // recipe is complete — the flag, not the number, carries unknown-vs-zero.
+    const known0: EditorIngredientLine = {
+      ...completeLine('b', 0),
+    };
+    renderWithClient(
+      <RecipeEditor initialIngredients={[known0]} initialServings={1} />,
+    );
+    const panel = screen.getByLabelText(/per-serving nutrition/i);
+    expect(within(panel).queryByRole('note')).toBeNull();
+  });
 });

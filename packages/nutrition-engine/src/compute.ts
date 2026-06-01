@@ -32,6 +32,15 @@ const REASON_UNRESOLVED_GRAMS = 'unresolved-grams';
  * recipe is flagged incomplete so the UI can surface the gap.
  */
 const REASON_MISSING_MICRONUTRIENTS = 'missing-micronutrients';
+/**
+ * Reason recorded when a line resolves to grams but the source did not provide
+ * one or more MACROS (`ingredient.absentMacros`). The macros it does have STILL
+ * contribute; an absent macro unavoidably sums as 0 (the accumulator is
+ * numeric), but the recipe is flagged so the absent value is surfaced as
+ * "unknown" and never silently read as a real 0 total (F-5, S-6). The flagged
+ * macro keys are appended to the reason for the UI.
+ */
+const REASON_MISSING_MACROS = 'missing-macros';
 
 /** A zeroed macro accumulator with an empty micronutrient union. */
 function emptyTotal(): Nutrition {
@@ -151,6 +160,17 @@ export function computeRecipeNutrition(
       line.ingredient.nutrition.micronutrients,
       factor,
     );
+    // If the source did not provide one or more macros, the present macros
+    // still count but the absent ones read as 0 in the numeric accumulator.
+    // Flag the line so completeness surfaces the gap instead of the recipe
+    // appearing complete with an understated total (F-5, S-6).
+    const absentMacros = line.ingredient.absentMacros ?? [];
+    if (absentMacros.length > 0) {
+      missing.push({
+        ingredientId: line.ingredient.id,
+        reason: `${REASON_MISSING_MACROS}: ${[...absentMacros].sort().join(',')}`,
+      });
+    }
     // An empty micronutrient map is a partial-data gap: macros are counted but
     // the absent micronutrients are never zero-filled, so flag the recipe.
     if (Object.keys(line.ingredient.nutrition.micronutrients).length === 0) {

@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import {
   computeRecipeNutrition,
   formatNutrition,
+  type MacroKey,
   type NutritionLine,
 } from '@meal-tracking/nutrition-engine';
 import type {
@@ -46,6 +47,12 @@ export interface EditorIngredientLine {
   referenceGrams: number;
   gramEquivalents: Record<string, number>;
   gramWeightPerQty: number | null;
+  /**
+   * Macros the source did not provide (absent = unknown, not zero — S-6). The
+   * engine flags these `missing-macros` so the placeholder 0 in `nutrition`
+   * never reads as a real total (Bundle 5 limitation guard).
+   */
+  absentMacros?: MacroKey[];
 }
 
 export interface RecipeEditorProps {
@@ -73,6 +80,7 @@ function toEngineLines(lines: EditorIngredientLine[]): NutritionLine[] {
       referenceGrams: l.referenceGrams,
       gramEquivalents: l.gramEquivalents,
       gramWeightPerQty: l.gramWeightPerQty,
+      absentMacros: l.absentMacros,
     },
   }));
 }

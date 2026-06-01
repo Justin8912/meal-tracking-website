@@ -5,6 +5,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import type { Micronutrient, Nutrition } from '@meal-tracking/shared';
+import type { MacroKey } from '@meal-tracking/nutrition-engine';
 import { apiFetch } from '../api/client.js';
 
 /**
@@ -58,8 +59,11 @@ export interface SavedIngredient {
 /**
  * Build a full-precision engine Nutrition from an API per-reference-grams
  * profile. Absent macros are not known; the engine's arithmetic needs numbers,
- * so they read as 0 here — the editor surfaces incompleteness via the engine's
- * completeness flag and never rounds/zero-fills at display (S-6).
+ * so they read as 0 here. That 0 is NOT a claim the value is zero — `absentMacros`
+ * (see {@link absentMacrosOf}) records which macros the API omitted so the engine
+ * flags the line `missing-macros` via completeness rather than silently treating
+ * the placeholder 0 as a real total (the Bundle 5 limitation; F-5, S-6). The
+ * editor surfaces that incompleteness and never rounds/zero-fills at display.
  */
 export function toEngineNutrition(profile: SavedIngredient['nutrition']): Nutrition {
   return {
@@ -70,6 +74,25 @@ export function toEngineNutrition(profile: SavedIngredient['nutrition']): Nutrit
     fiberG: profile.fiberG ?? 0,
     micronutrients: profile.micronutrients,
   };
+}
+
+/**
+ * Which macros the API did NOT provide for this ingredient (absent = unknown,
+ * not zero — S-6). The API returns macro fields only when known
+ * (toIngredientResponse omits NULL columns), so an `undefined` field here means
+ * the source never reported it. The engine consumes this to flag the line
+ * `missing-macros` instead of letting the placeholder 0 read as a real total.
+ */
+export function absentMacrosOf(
+  profile: SavedIngredient['nutrition'],
+): MacroKey[] {
+  const absent: MacroKey[] = [];
+  if (profile.calories === undefined) absent.push('calories');
+  if (profile.proteinG === undefined) absent.push('proteinG');
+  if (profile.carbsG === undefined) absent.push('carbsG');
+  if (profile.fatG === undefined) absent.push('fatG');
+  if (profile.fiberG === undefined) absent.push('fiberG');
+  return absent;
 }
 
 /** Query key for a USDA search; a distinct query per search term. */

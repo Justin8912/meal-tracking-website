@@ -6,6 +6,7 @@ import {
   useSnapshotUsdaIngredient,
   useCreateCustomIngredient,
   toEngineNutrition,
+  absentMacrosOf,
   type SavedIngredient,
   type UsdaSearchItem,
 } from '../query/ingredients.js';
@@ -43,6 +44,10 @@ function lineFromSaved(
     referenceGrams: saved.referenceGrams,
     gramEquivalents: saved.unitGramEquivalents,
     gramWeightPerQty: saved.gramWeightPerQty,
+    // Record which macros the API omitted so the engine flags the line
+    // missing-macros rather than treating the placeholder 0 as a real total
+    // (S-6, F-5).
+    absentMacros: absentMacrosOf(saved.nutrition),
   };
 }
 
