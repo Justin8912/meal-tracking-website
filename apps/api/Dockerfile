@@ -7,9 +7,12 @@
 #
 # The runtime executes plain Node on the emitted dist/ output (node dist/server.js).
 # There is NO tsx in the runtime image: tsx is a devDependency only, so the
-# production install (npm ci --omit=dev) never pulls it in. The shared workspace
-# package is compiled to dist/ as well and resolved at runtime via its default
-# export condition (compiled JS), not its "development" (TS source) condition.
+# production install (npm ci --omit=dev) never pulls it in. The shared and
+# nutrition-engine workspace packages are compiled to dist/ as well and resolved at
+# runtime via their default export condition (compiled JS), not their "development"
+# (TS source) condition. The /api/v1/plans/summary route imports
+# @meal-tracking/nutrition-engine at runtime, so the engine is a runtime dependency
+# and must be present in the production image alongside @meal-tracking/shared.
 
 # ---- Stage 1: install full workspace deps, type-check, and emit JS ----
 FROM node:20-alpine AS build
@@ -17,11 +20,13 @@ WORKDIR /repo
 
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
+COPY packages/nutrition-engine/package.json packages/nutrition-engine/
 COPY apps/web/package.json apps/web/
 COPY apps/api/package.json apps/api/
 RUN npm ci
 
 COPY packages/shared/ packages/shared/
+COPY packages/nutrition-engine/ packages/nutrition-engine/
 COPY apps/api/ apps/api/
 
 # Type-check, then compile @meal-tracking/shared and @meal-tracking/api to dist/.
@@ -46,6 +51,11 @@ COPY --from=build /repo/node_modules ./node_modules
 # Compiled shared package: manifest + emitted JS/declarations (dist/index.js).
 COPY --from=build /repo/packages/shared/package.json packages/shared/
 COPY --from=build /repo/packages/shared/dist packages/shared/dist
+
+# Compiled nutrition-engine package: manifest + emitted JS/declarations
+# (dist/index.js). Imported at runtime by the /api/v1/plans/summary route.
+COPY --from=build /repo/packages/nutrition-engine/package.json packages/nutrition-engine/
+COPY --from=build /repo/packages/nutrition-engine/dist packages/nutrition-engine/dist
 
 # Compiled API: manifest + emitted JS. The versioned SQL migrations stay as data
 # files alongside the compiled output - migrate.js resolves them at

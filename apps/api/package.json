@@ -6,7 +6,7 @@
   "main": "./dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "npm run build -w @meal-tracking/shared && tsc -p tsconfig.build.json",
+    "build": "npm run build -w @meal-tracking/shared && npm run build -w @meal-tracking/nutrition-engine && tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "migrate": "node dist/db/migrate.js",
     "typecheck": "tsc --noEmit",
@@ -14,6 +14,7 @@
     "e2e:recipe": "vitest run src/routes/e2e-recipe-nutrition.test.ts src/routes/e2e-usda-degradation.test.ts"
   },
   "dependencies": {
+    "@meal-tracking/nutrition-engine": "0.1.0",
     "@meal-tracking/shared": "0.1.0",
     "drizzle-orm": "0.45.2",
     "fastify": "5.8.5",
@@ -22,7 +23,6 @@
     "zod": "3.24.1"
   },
   "devDependencies": {
-    "@meal-tracking/nutrition-engine": "0.1.0",
     "@types/pg": "8.11.10",
     "drizzle-kit": "0.31.10",
     "supertest": "7.1.3",
