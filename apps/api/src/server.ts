@@ -10,6 +10,7 @@ import { registerUnitsRoute } from './routes/units.js';
 import { registerRecipesRoutes } from './routes/recipes.js';
 import { registerTagsRoutes } from './routes/tags.js';
 import { registerIngredientsRoutes } from './routes/ingredients.js';
+import { registerPlansRoutes } from './routes/plans.js';
 import { createUsdaClient, type UsdaClient } from './usda/client.js';
 import { createCachedUsdaClient } from './usda/cache.js';
 
@@ -115,6 +116,7 @@ export async function buildServer(
       registerRecipesRoutes(api, handle.db);
       registerTagsRoutes(api, handle.db);
       registerIngredientsRoutes(api, handle.db, usdaClient);
+      registerPlansRoutes(api, handle.db);
     },
     { prefix: API_BASE_PATH },
   );
