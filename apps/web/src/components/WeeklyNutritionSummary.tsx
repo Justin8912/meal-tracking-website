@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { PlanEntry } from '@meal-tracking/shared';
 import { useWeeklySummary } from '../query/plans.js';
+import { MacroBar } from './MacroBar.js';
 
 /**
  * Weekly nutrition summary (STEP-22, FR-5, AC-5.1/AC-5.2; AD-6).
@@ -75,27 +76,37 @@ export function WeeklyNutritionSummary({
       ) : (
         <>
           {/* Macros only - no vitamins/minerals at the weekly level (AC-5.1). */}
-          <dl>
-            <div>
-              <dt>Calories</dt>
-              <dd aria-label="Total calories">{summary.totals.calories}</dd>
-            </div>
-            <div>
-              <dt>Protein (g)</dt>
-              <dd aria-label="Total protein">{summary.totals.proteinG}</dd>
-            </div>
-            <div>
-              <dt>Carbs (g)</dt>
-              <dd aria-label="Total carbs">{summary.totals.carbsG}</dd>
-            </div>
-            <div>
-              <dt>Fat (g)</dt>
-              <dd aria-label="Total fat">{summary.totals.fatG}</dd>
-            </div>
-            <div>
-              <dt>Fiber (g)</dt>
-              <dd aria-label="Total fiber">{summary.totals.fiberG}</dd>
-            </div>
+          <dl className="macro-bars">
+            <MacroBar
+              variant="calories"
+              label="Calories"
+              value={summary.totals.calories}
+              valueAriaLabel="Total calories"
+            />
+            <MacroBar
+              variant="protein"
+              label="Protein (g)"
+              value={summary.totals.proteinG}
+              valueAriaLabel="Total protein"
+            />
+            <MacroBar
+              variant="carbs"
+              label="Carbs (g)"
+              value={summary.totals.carbsG}
+              valueAriaLabel="Total carbs"
+            />
+            <MacroBar
+              variant="fat"
+              label="Fat (g)"
+              value={summary.totals.fatG}
+              valueAriaLabel="Total fat"
+            />
+            <MacroBar
+              variant="fiber"
+              label="Fiber (g)"
+              value={summary.totals.fiberG}
+              valueAriaLabel="Total fiber"
+            />
           </dl>
 
           {/* State exactly which meals are not counted (AC-5.2). Only shown when

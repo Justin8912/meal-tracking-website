@@ -14,6 +14,7 @@ import { recipeInputSchema } from '@meal-tracking/shared';
 import { useSaveRecipe } from '../query/recipes.js';
 import { ApiError } from '../api/client.js';
 import { IngredientPicker } from './IngredientPicker.js';
+import { MacroBar } from './MacroBar.js';
 
 /**
  * Recipe editor (STEP-37, FR-1/FR-4, AD-5).
@@ -322,27 +323,17 @@ export function RecipeEditor({
             excluded from these totals (not counted as zero).
           </p>
         ) : null}
-        <dl>
-          <div>
-            <dt>Calories</dt>
-            <dd aria-label="Per-serving calories">{perServing.calories}</dd>
-          </div>
-          <div>
-            <dt>Protein (g)</dt>
-            <dd>{perServing.proteinG}</dd>
-          </div>
-          <div>
-            <dt>Carbs (g)</dt>
-            <dd>{perServing.carbsG}</dd>
-          </div>
-          <div>
-            <dt>Fat (g)</dt>
-            <dd>{perServing.fatG}</dd>
-          </div>
-          <div>
-            <dt>Fiber (g)</dt>
-            <dd>{perServing.fiberG}</dd>
-          </div>
+        <dl className="macro-bars">
+          <MacroBar
+            variant="calories"
+            label="Calories"
+            value={perServing.calories}
+            valueAriaLabel="Per-serving calories"
+          />
+          <MacroBar variant="protein" label="Protein (g)" value={perServing.proteinG} />
+          <MacroBar variant="carbs" label="Carbs (g)" value={perServing.carbsG} />
+          <MacroBar variant="fat" label="Fat (g)" value={perServing.fatG} />
+          <MacroBar variant="fiber" label="Fiber (g)" value={perServing.fiberG} />
         </dl>
       </section>
 

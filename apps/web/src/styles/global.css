@@ -32,7 +32,8 @@
   --danger: #c45a5a;
   --success: #6a9e5a;
 
-  --radius-card: 12px;
+  --radius-card: 8px;
+  --radius-modal: 12px;
   --radius-control: 8px;
   --shadow-card: 0 2px 20px rgba(58, 52, 40, 0.06);
   --shadow-pop: 0 8px 24px rgba(58, 52, 40, 0.12);
@@ -94,9 +95,14 @@ a:hover {
 }
 
 /* ── App shell (router.tsx AppLayout) ──────────────────────────────────────── */
+.app-shell {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
 .app-header {
   background: linear-gradient(135deg, #3a3428 0%, #5c5549 100%);
-  padding: 28px 24px 0;
+  padding: 28px 40px 0;
 }
 
 .app-header__inner {
@@ -104,11 +110,38 @@ a:hover {
   margin: 0 auto;
 }
 
+/* Brand on the left, the recipe-count meta slot on the right (prototype header). */
+.app-header__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
 .app-header__brand {
   display: flex;
   align-items: baseline;
   gap: 12px;
-  margin-bottom: 24px;
+}
+
+.app-header__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-header__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fat);
+  flex-shrink: 0;
+}
+
+.app-header__count {
+  font-size: 12px;
+  color: var(--light);
 }
 
 .app-header__title {
@@ -162,7 +195,19 @@ a:hover {
 .app-main {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 0 24px 60px;
+  padding: 0 40px 60px;
+}
+
+@media (max-width: 600px) {
+  .app-header {
+    padding: 24px 16px 0;
+  }
+  .app-main {
+    padding: 0 16px 40px;
+  }
+  .app-nav__tab {
+    padding: 12px 18px;
+  }
 }
 
 /* A shared "panel" surface that mirrors the prototype's card with the tab notch
@@ -308,27 +353,68 @@ label {
 }
 
 /* ── Meal Library view ─────────────────────────────────────────────────────── */
+/* The view sits inside the white .panel card, so its chrome is the card's
+   internal toolbar + list rows rather than its own surface. */
+.meal-library {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The library heading + Add-recipe toggle form the card's top toolbar. */
+.meal-library > h1 {
+  margin: 0;
+  padding: 18px 24px 0;
+  font-size: 22px;
+}
+
+.meal-library > button[aria-expanded] {
+  align-self: flex-start;
+  margin: 12px 24px 0;
+}
+
 .meal-library__filters {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
   align-items: flex-end;
-  padding: 16px 0;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
 }
 
 .meal-library__filters label {
   flex: 1;
   min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
-/* The recipe list (a <ul aria-label="Recipes">) as soft cards. */
+.meal-library__filters input,
+.meal-library__filters select {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+}
+
+/* Loading/empty/error copy inside the library gets generous, centered padding. */
+.meal-library > p {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--light);
+  margin: 0;
+}
+
+/* The recipe list (a <ul aria-label="Recipes">): rows with a bottom border that
+   tuck into the card, hover-highlighted (prototype list rows). */
 [aria-label='Recipes'] {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 [aria-label='Recipes'] > li {
@@ -336,11 +422,13 @@ label {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 18px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.2s;
+}
+
+[aria-label='Recipes'] > li:hover {
+  background: var(--card-alt);
 }
 
 [aria-label='Recipes'] > li > span:first-child {
@@ -371,12 +459,11 @@ label {
 
 /* ── Recipe editor (recipe-editor__*) ──────────────────────────────────────── */
 .recipe-editor {
-  background: var(--card);
+  background: var(--card-alt);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
   padding: 24px;
-  margin: 8px 0 20px;
+  margin: 12px 24px 4px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -663,10 +750,35 @@ label {
 }
 
 /* ── Weekly planner view ───────────────────────────────────────────────────── */
+/* The view sits inside the white .panel card; its sections get internal padding
+   and dividers rather than their own surfaces. */
 [aria-labelledby='weekly-planner-heading'] {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  padding: 18px 24px 24px;
+}
+
+[aria-labelledby='weekly-planner-heading'] > h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+/* The "Edit plan / Done editing" toggle reads as a primary action button. */
+[aria-labelledby='weekly-planner-heading'] > button[aria-pressed] {
+  align-self: flex-start;
+  width: auto;
+  padding: 10px 20px;
+  background: var(--dark);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+[aria-labelledby='weekly-planner-heading'] > button[aria-pressed='true'] {
+  background: var(--med);
 }
 
 /* Week prev/next navigation (the prototype's centered week bar). */
@@ -675,10 +787,9 @@ label {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  background: var(--card);
+  background: var(--card-alt);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
   padding: 14px 20px;
 }
 
@@ -1103,4 +1214,116 @@ label {
   font-size: 16px;
   font-weight: 600;
   color: var(--med);
+}
+
+/* ── MacroBar (components/MacroBar.tsx) ────────────────────────────────────── */
+/* A <dl class="macro-bars"> of MacroBar rows. Each row is a <div class="macro-bar">
+   holding the <dt> label, the <dd> value, and a thin colored track. Used in the
+   RecipeEditor nutrition panel, the PlannedMealDetail, and the WeeklyNutritionSummary
+   (the prototype's MacroBar). The per-component column-reverse <dl> rules above are
+   superseded for these macro lists by the higher-specificity selectors here. */
+.macro-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+}
+
+.recipe-editor__nutrition dl.macro-bars,
+.weekly-nutrition-summary dl.macro-bars,
+.planned-meal-detail dl.macro-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.macro-bars > .macro-bar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+.macro-bars > .macro-bar > .macro-bar__label {
+  grid-column: 1;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.macro-bars > .macro-bar > .macro-bar__value {
+  grid-column: 2;
+  margin: 0;
+  justify-self: end;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.macro-bars > .macro-bar > .macro-bar__track {
+  grid-column: 1 / -1;
+  height: 6px;
+  background: var(--chip-bg);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.macro-bars > .macro-bar > .macro-bar__track > .macro-bar__fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Per-macro fill colors (prototype hues). */
+.macro-bar__track--calories > .macro-bar__fill {
+  background: var(--med);
+}
+.macro-bar__track--protein > .macro-bar__fill {
+  background: var(--protein);
+}
+.macro-bar__track--carbs > .macro-bar__fill {
+  background: var(--carbs);
+}
+.macro-bar__track--fat > .macro-bar__fill {
+  background: var(--fat);
+}
+.macro-bar__track--fiber > .macro-bar__fill {
+  background: var(--fiber);
+}
+
+/* On the dark "per serving" nutrition panel the labels/values read on dark. */
+.recipe-editor__nutrition .macro-bar__label {
+  color: rgba(255, 255, 255, 0.55);
+}
+.recipe-editor__nutrition .macro-bar__value {
+  color: #fff;
+}
+.recipe-editor__nutrition .macro-bar__track {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* On the light summary/detail surfaces the labels are muted, values dark. */
+.weekly-nutrition-summary .macro-bar__label,
+.planned-meal-detail .macro-bar__label {
+  color: var(--light);
+}
+.weekly-nutrition-summary .macro-bar__value,
+.planned-meal-detail .macro-bar__value {
+  color: var(--med);
+}
+
+/* ── Empty / loading / error treatment (EmptyState, prototype ~168) ────────── */
+/* The prototype centered empty/loading/error blocks with a Playfair title in a
+   muted tone over a smaller light subtitle, with a typographic glyph (NOT an
+   emoji, S-7) above. The bare <p role="status|alert"> messages keep their text
+   (the tests assert it) but render in this centered, generous treatment. */
+.meal-library > p[role='status'],
+.meal-library > p[role='alert'],
+[aria-labelledby='weekly-planner-heading'] > p[role='status'] {
+  padding: 48px 24px;
+  text-align: center;
 }

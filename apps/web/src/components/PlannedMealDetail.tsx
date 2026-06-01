@@ -6,6 +6,7 @@ import {
 } from '@meal-tracking/nutrition-engine';
 import type { NutritionLine } from '@meal-tracking/nutrition-engine';
 import { useRecipeDetail } from '../query/recipes.js';
+import { MacroBar } from './MacroBar.js';
 import {
   useIngredients,
   toEngineNutrition,
@@ -148,37 +149,37 @@ function RecipeMealBody({ recipeId }: { recipeId: string }): JSX.Element {
                 are excluded from these totals (not counted as zero).
               </p>
             ) : null}
-            <dl>
-              <div>
-                <dt>Calories</dt>
-                <dd aria-label="Per-serving calories">
-                  {nutrition.perServing.calories}
-                </dd>
-              </div>
-              <div>
-                <dt>Protein (g)</dt>
-                <dd aria-label="Per-serving protein">
-                  {nutrition.perServing.proteinG}
-                </dd>
-              </div>
-              <div>
-                <dt>Carbs (g)</dt>
-                <dd aria-label="Per-serving carbs">
-                  {nutrition.perServing.carbsG}
-                </dd>
-              </div>
-              <div>
-                <dt>Fat (g)</dt>
-                <dd aria-label="Per-serving fat">
-                  {nutrition.perServing.fatG}
-                </dd>
-              </div>
-              <div>
-                <dt>Fiber (g)</dt>
-                <dd aria-label="Per-serving fiber">
-                  {nutrition.perServing.fiberG}
-                </dd>
-              </div>
+            <dl className="macro-bars">
+              <MacroBar
+                variant="calories"
+                label="Calories"
+                value={nutrition.perServing.calories}
+                valueAriaLabel="Per-serving calories"
+              />
+              <MacroBar
+                variant="protein"
+                label="Protein (g)"
+                value={nutrition.perServing.proteinG}
+                valueAriaLabel="Per-serving protein"
+              />
+              <MacroBar
+                variant="carbs"
+                label="Carbs (g)"
+                value={nutrition.perServing.carbsG}
+                valueAriaLabel="Per-serving carbs"
+              />
+              <MacroBar
+                variant="fat"
+                label="Fat (g)"
+                value={nutrition.perServing.fatG}
+                valueAriaLabel="Per-serving fat"
+              />
+              <MacroBar
+                variant="fiber"
+                label="Fiber (g)"
+                value={nutrition.perServing.fiberG}
+                valueAriaLabel="Per-serving fiber"
+              />
             </dl>
           </>
         )}
