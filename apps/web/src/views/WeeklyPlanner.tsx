@@ -425,7 +425,11 @@ export function WeeklyPlanner(): JSX.Element {
     refetch,
   } = useWeekPlan(weekStart);
 
-  // Group entries by day for O(1) per-day lookup when rendering the grid.
+  // Group the CURRENT week's server entries by day for O(1) per-day lookup when
+  // rendering the grid. `entries` is recomputed from the week-keyed query on
+  // every weekStart change, so a revisited week (even after cache eviction)
+  // re-reads its meals from the DB; nothing is held in component state, which is
+  // the AC-3.3 history guarantee.
   const byDay = new Map<number, PlanEntry[]>();
   for (const entry of entries ?? []) {
     const list = byDay.get(entry.dayOfWeek) ?? [];
