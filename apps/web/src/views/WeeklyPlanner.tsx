@@ -10,7 +10,7 @@ import {
 } from '../query/plans.js';
 import { useRecipes } from '../query/recipes.js';
 import { PlannedMealDetail } from '../components/PlannedMealDetail.js';
-import { RecipePalette } from '../components/RecipePalette.js';
+import { WeekGrid } from '../components/WeekGrid.js';
 
 /**
  * Weekly Planner view (FR-1, AD-4). Fills the platform's /planner placeholder
@@ -520,29 +520,13 @@ export function WeeklyPlanner(): JSX.Element {
         {editMode ? 'Done editing' : 'Edit plan'}
       </button>
 
-      {editMode ? (
-        // Two-column grid (>=768px): palette LEFT, week RIGHT (AC-4.1). On a
-        // phone it collapses to a single column with the palette stacked as a
-        // drawer above the week (NFR-2). The app ships no stylesheet yet, so the
-        // responsive rule is carried in a scoped <style> on the layout class.
-        <>
-          <style>{`
-            .weekly-planner__edit-layout {
-              display: grid;
-              gap: 1rem;
-              grid-template-columns: minmax(0, 1fr);
-            }
-            @media (min-width: 768px) {
-              .weekly-planner__edit-layout {
-                grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr);
-              }
-            }
-          `}</style>
-          <div className="weekly-planner__edit-layout">
-            <RecipePalette />
-            {week}
-          </div>
-        </>
+      {editMode && !isLoading && !isError ? (
+        // Edit mode: the WeekGrid renders the two-panel layout (palette LEFT,
+        // week RIGHT >=768px; single column on phones, NFR-2, AC-4.1) inside a
+        // dnd-kit DndContext, so a recipe can be dragged or tapped onto a
+        // day/slot (AC-4.3/4.4). The loading/error states still use the plain
+        // `week` block so a failed load shows the retry, not an empty grid.
+        <WeekGrid weekStart={weekStart} byDay={byDay} />
       ) : (
         week
       )}

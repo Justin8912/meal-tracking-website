@@ -37,6 +37,9 @@ describe('WeekGrid dnd-kit sensor configuration', () => {
       (descriptor) => descriptor.sensor === PointerSensor,
     );
     expect(pointer).toBeTruthy();
-    expect(pointer?.options?.activationConstraint).toEqual(POINTER_ACTIVATION);
+    const options = pointer?.options as
+      | { activationConstraint?: unknown }
+      | undefined;
+    expect(options?.activationConstraint).toEqual(POINTER_ACTIVATION);
   });
 });

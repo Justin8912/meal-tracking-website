@@ -138,13 +138,15 @@ describe('WeeklyPlanner assignment (tap-to-assign fallback)', () => {
     fireEvent.click(target);
 
     await waitFor(() => expect(posts.length).toBe(1));
-    expect(posts[0].body).toMatchObject({
+    const post = posts[0];
+    expect(post).toBeTruthy();
+    expect(post?.body).toMatchObject({
       dayOfWeek: 1,
       mealSlot: 'dinner',
       recipeId: '11111111-1111-1111-1111-111111111111',
     });
     // Recipe-only entry: no freeform fields (XOR, S-1).
-    expect((posts[0].body as Record<string, unknown>).freeformTitle).toBeUndefined();
+    expect((post?.body as Record<string, unknown>).freeformTitle).toBeUndefined();
   });
 
   it('does not assign on a day/slot tap when no recipe is selected', async () => {
