@@ -31,6 +31,11 @@ const envSchema = z.object({
   // Override for the USDA base URL (defaults to production). Lets tests point
   // the client at a stub server without touching the real upstream.
   USDA_BASE_URL: z.string().url().default('https://api.nal.usda.gov/fdc/v1'),
+  // Browser origin allowed to call the API cross-origin (AD-5). The SPA is
+  // served from a different origin (nginx :8080) than the API (:3000), so the
+  // browser enforces CORS; this configures the single allowed Origin. Defaults
+  // to the local Compose web origin so it works out of the box.
+  CORS_ORIGIN: z.string().url().default('http://localhost:8080'),
 });
 
 export interface AppConfig {
@@ -42,6 +47,8 @@ export interface AppConfig {
   usdaApiKey: string | undefined;
   /** USDA FoodData Central base URL. */
   usdaBaseUrl: string;
+  /** Browser origin allowed to call the API cross-origin (AD-5). */
+  corsOrigin: string;
 }
 
 /**
@@ -73,6 +80,7 @@ export function loadConfig(
     logLevel: parsed.data.LOG_LEVEL,
     usdaApiKey: parsed.data.USDA_API_KEY,
     usdaBaseUrl: parsed.data.USDA_BASE_URL,
+    corsOrigin: parsed.data.CORS_ORIGIN,
   };
 }
 

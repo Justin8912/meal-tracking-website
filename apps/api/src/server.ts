@@ -2,6 +2,7 @@ import Fastify, {
   type FastifyInstance,
   type FastifyError,
 } from 'fastify';
+import cors from '@fastify/cors';
 import type { ErrorEnvelope } from '@meal-tracking/shared';
 import { getConfig, type AppConfig } from './config/env.js';
 import { createDbHandle, type DbHandle } from './db/client.js';
@@ -35,6 +36,12 @@ export interface BuildServerOptions {
    * client is built from the config above.
    */
   usdaClient?: UsdaClient;
+  /**
+   * Browser origin allowed to call the API cross-origin (AD-5). The SPA is
+   * served from a different origin than the API, so the browser enforces CORS.
+   * Defaults to the local Compose web origin when omitted.
+   */
+  corsOrigin?: string;
 }
 
 /**
@@ -61,6 +68,17 @@ export async function buildServer(
         'api_key',
       ],
     },
+  });
+
+  // CORS must be registered before the routes so the browser SPA (served from a
+  // different origin than the API) can call it cross-origin (AD-5). Only the
+  // configured web origin is allowed; credentials are not used (no cookies, the
+  // SPA holds no session), and the methods/headers match what the API serves.
+  await app.register(cors, {
+    origin: options.corsOrigin ?? 'http://localhost:8080',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type'],
+    credentials: false,
   });
 
   const handle: DbHandle = createDbHandle(options.databaseUrl);
@@ -134,6 +152,7 @@ async function start(): Promise<void> {
     logLevel: config.logLevel,
     usdaApiKey: config.usdaApiKey,
     usdaBaseUrl: config.usdaBaseUrl,
+    corsOrigin: config.corsOrigin,
   });
 
   const shutdown = async (signal: string): Promise<void> => {
