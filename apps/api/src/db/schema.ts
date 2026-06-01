@@ -4,6 +4,8 @@ import {
   text,
   numeric,
   integer,
+  smallint,
+  date,
   jsonb,
   timestamp,
   primaryKey,
@@ -184,9 +186,58 @@ export const usdaFoodCache = pgTable('usda_food_cache', {
     .defaultNow(),
 });
 
+/**
+ * Weekly-planner feature table (migration 0003, AD-1). A plan entry is a thin
+ * association of (week, day, slot, position) to a meal that is EITHER a saved
+ * recipe OR a freeform entry. This model mirrors the 0003 SQL exactly so
+ * Drizzle inserts (S-2) match the migrated DB. The XOR rule and the day/slot
+ * ranges are enforced by CHECK constraints in 0003 (defence-in-depth alongside
+ * the shared Zod refinement); Drizzle does not model CHECKs, so they live in
+ * the SQL. recipe_id FKs to recipes(id) ON DELETE SET NULL so a deleted recipe
+ * leaves the entry as a tombstone (AD-3).
+ */
+export const planEntries = pgTable(
+  'plan_entries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    // The Monday DATE of the week, computed server-side (AD-2, S-4).
+    weekStartDate: date('week_start_date').notNull(),
+    // 0 (Monday) .. 6 (Sunday).
+    dayOfWeek: smallint('day_of_week').notNull(),
+    mealSlot: text('meal_slot', {
+      enum: ['breakfast', 'lunch', 'dinner', 'snack'],
+    }).notNull(),
+    position: integer('position').notNull().default(0),
+    // Null for a freeform meal or after the referenced recipe is deleted
+    // (tombstone, AD-3).
+    recipeId: uuid('recipe_id').references(() => recipes.id, {
+      onDelete: 'set null',
+    }),
+    freeformTitle: text('freeform_title'),
+    freeformDescription: text('freeform_description'),
+    freeformLink: text('freeform_link'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('idx_plan_entries_workspace_week').on(
+      table.workspaceId,
+      table.weekStartDate,
+    ),
+  ],
+);
+
 export type IngredientRow = typeof ingredients.$inferSelect;
 export type RecipeRow = typeof recipes.$inferSelect;
 export type RecipeIngredientRow = typeof recipeIngredients.$inferSelect;
 export type TagRow = typeof tags.$inferSelect;
 export type RecipeTagRow = typeof recipeTags.$inferSelect;
 export type UsdaFoodCacheRow = typeof usdaFoodCache.$inferSelect;
+export type PlanEntryRow = typeof planEntries.$inferSelect;

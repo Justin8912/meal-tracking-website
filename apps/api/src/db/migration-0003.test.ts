@@ -13,11 +13,15 @@ const describeDb = TEST_DATABASE_URL ? describe : describe.skip;
  * 0002 (AD-1) and must NOT redefine workspaces/units or the recipe-library
  * tables. After applying 0001 -> 0002 -> 0003 (lexical order, matching the
  * runner) the plan_entries table exists with its constraints:
- *  - the XOR CHECK rejects a row that sets BOTH recipe_id and freeform_title;
+ *  - the "not both" CHECK rejects a row that sets BOTH recipe_id and
+ *    freeform_title;
  *  - a recipe-only and a freeform-only row insert;
  *  - day_of_week is constrained to 0..6 and meal_slot to the four slots;
  *  - deleting the referenced recipe leaves the entry as a tombstone with
- *    recipe_id NULL (ON DELETE SET NULL - AD-3), not deleted.
+ *    recipe_id NULL (ON DELETE SET NULL - AD-3), not deleted - so the CHECK
+ *    must PERMIT the both-NULL tombstone state (a strict XOR would block the
+ *    delete). The neither-on-insert rejection is owned by the shared Zod
+ *    schema at the API boundary (S-1), covered by the STEP-1 schema tests.
  * Fails before STEP-3 (0003 not yet created).
  */
 async function applyMigration(file: string): Promise<void> {
@@ -77,7 +81,7 @@ describeDb('0003_weekly_planner migration (integration)', () => {
     expect(result.rows[0]?.freeform_title).toBe('Leftovers');
   });
 
-  it('rejects a row that sets BOTH recipe_id and freeform_title via the XOR CHECK', async () => {
+  it('rejects a row that sets BOTH recipe_id and freeform_title via the "not both" CHECK', async () => {
     const { getDb } = await import('./client.js');
     const recipe = await getDb().execute(
       sql`INSERT INTO recipes (workspace_id, name, meal_type, servings)
@@ -93,14 +97,18 @@ describeDb('0003_weekly_planner migration (integration)', () => {
     ).rejects.toThrow();
   });
 
-  it('rejects a row that sets NEITHER recipe_id nor freeform_title via the XOR CHECK', async () => {
+  it('PERMITS a both-NULL row so the ON DELETE SET NULL tombstone is legal (AD-3)', async () => {
+    // The neither-set state is the tombstone produced by ON DELETE SET NULL; a
+    // strict XOR would forbid it and block recipe deletion. The DB therefore
+    // allows both-NULL; rejecting a neither-set row at INSERT time is the shared
+    // Zod schema's job (S-1, covered by the STEP-1 schema tests).
     const { getDb } = await import('./client.js');
-    await expect(
-      getDb().execute(
-        sql`INSERT INTO plan_entries (workspace_id, week_start_date, day_of_week, meal_slot)
-            VALUES (${DEFAULT_WORKSPACE_ID}, '2026-06-01', 3, 'snack')`,
-      ),
-    ).rejects.toThrow();
+    const result = await getDb().execute(
+      sql`INSERT INTO plan_entries (workspace_id, week_start_date, day_of_week, meal_slot)
+          VALUES (${DEFAULT_WORKSPACE_ID}, '2026-06-01', 3, 'snack')
+          RETURNING id`,
+    );
+    expect(result.rows.length).toBe(1);
   });
 
   it('rejects day_of_week 7 via the CHECK constraint', async () => {
