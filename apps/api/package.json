@@ -11,7 +11,7 @@
     "migrate": "node dist/db/migrate.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "e2e:recipe": "vitest run src/routes/e2e-recipe-nutrition.test.ts"
+    "e2e:recipe": "vitest run src/routes/e2e-recipe-nutrition.test.ts src/routes/e2e-usda-degradation.test.ts"
   },
   "dependencies": {
     "@meal-tracking/shared": "0.1.0",
