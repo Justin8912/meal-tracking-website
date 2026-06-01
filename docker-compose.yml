@@ -39,8 +39,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # Host port 8100 published to the container's internal 3000 (Fastify).
     ports:
-      - "${API_PORT:-3000}:3000"
+      - "${API_PORT:-8100}:3000"
     restart: unless-stopped
 
   web:
@@ -49,12 +50,15 @@ services:
       dockerfile: apps/web/Dockerfile
     # The browser reaches the API directly; API_BASE_URL is injected into the SPA
     # at container start (env-config.js). No secret is passed to the web service.
+    # Defaults to the API's published host port (8100); for remote access set
+    # API_BASE_URL in .env to the server's host/IP, e.g. http://my-server:8100.
     environment:
-      API_BASE_URL: ${API_BASE_URL}
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8100}
     depends_on:
       - api
+    # Host port 8090 published to the container's internal 8080 (nginx).
     ports:
-      - "${WEB_PORT:-8080}:8080"
+      - "${WEB_PORT:-8090}:8080"
     restart: unless-stopped
 
 volumes:
