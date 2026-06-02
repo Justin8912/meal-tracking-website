@@ -61,7 +61,10 @@ export function normalizeToMonday(isoDate: string): string {
 }
 
 /** Map a persisted plan-entry DB row to the shared PlanEntry response shape. */
-function toPlanEntry(row: PlanEntryRow): PlanEntry {
+function toPlanEntry(
+  row: PlanEntryRow,
+  recipeName?: string | null,
+): PlanEntry {
   return {
     id: row.id,
     // The `date` column comes back as a YYYY-MM-DD string from pg.
@@ -70,6 +73,9 @@ function toPlanEntry(row: PlanEntryRow): PlanEntry {
     mealSlot: row.mealSlot,
     position: row.position,
     recipeId: row.recipeId,
+    // recipeName is a convenience field so the UI can display the recipe title
+    // without a separate GET /recipes/:id fetch for every plan entry.
+    recipeName: recipeName ?? undefined,
     freeformTitle: row.freeformTitle,
     freeformDescription: row.freeformDescription,
     freeformLink: row.freeformLink,
@@ -474,9 +480,17 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
     // Normalize to the Monday so any in-week date returns the right week (AD-2).
     const weekStartDate = normalizeToMonday(parsedQuery.data.weekStart);
 
+    // LEFT JOIN recipes so every plan entry carries the recipe's display name.
+    // A tombstone entry (recipe deleted → recipeId NULL) returns null for the
+    // name, which toPlanEntry maps to undefined (recipeName is optional on the
+    // PlanEntry type). Parameterized Drizzle query (S-4).
     const rows = await db
-      .select()
+      .select({
+        entry: planEntries,
+        recipeName: recipes.name,
+      })
       .from(planEntries)
+      .leftJoin(recipes, eq(planEntries.recipeId, recipes.id))
       .where(
         and(
           eq(planEntries.workspaceId, workspaceId),
@@ -485,6 +499,8 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
       )
       .orderBy(asc(planEntries.dayOfWeek), asc(planEntries.position));
 
-    return reply.code(200).send(rows.map(toPlanEntry));
+    return reply.code(200).send(
+      rows.map((r) => toPlanEntry(r.entry, r.recipeName)),
+    );
   });
 }

@@ -516,6 +516,7 @@ function PlannerGrid({
   dates: Date[];
 }): JSX.Element {
   const [viewingEntry, setViewingEntry] = useState<PlanEntry | null>(null);
+  const remove = useDeletePlanEntry();
   const today = new Date();
   const todayStr = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}-${String(today.getUTCDate()).padStart(2, '0')}`;
 
@@ -564,19 +565,35 @@ function PlannerGrid({
                     <span className="planner-grid__cell-empty">—</span>
                   ) : (
                     dayEntries.map((entry) => (
-                      // aria-hidden + tabIndex=-1: excluded from a11y tree so role/label
-                      // queries don't see it. data-label drives the CSS ::before text so
-                      // the name appears visually but NOT in textContent (invisible to
-                      // findByText, which only searches DOM text nodes).
-                      <button
+                      // aria-hidden: the visual grid is excluded from the a11y tree.
+                      // All a11y structure (button labels, remove) lives in the
+                      // sr-only DayCell shadow list below; these cards are purely
+                      // visual and must not produce duplicate text in the DOM tree
+                      // that testing-library's getByText would find.
+                      // aria-hidden on the whole card keeps this out of the
+                      // a11y tree. The name is in data-label (CSS ::before)
+                      // so findByText never sees it as a DOM text node.
+                      // Real a11y + remove access lives in the sr-only DayCell.
+                      <div
                         key={entry.id}
-                        type="button"
                         className="planner-grid__meal-card"
-                        data-label={entryLabel(entry)}
                         aria-hidden="true"
-                        tabIndex={-1}
+                        data-label={entryLabel(entry)}
                         onClick={() => setViewingEntry(entry)}
-                      />
+                      >
+                        <button
+                          type="button"
+                          className="planner-grid__meal-remove"
+                          tabIndex={-1}
+                          disabled={remove.isPending}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            remove.mutate(entry.id);
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
                     ))
                   )}
                 </div>

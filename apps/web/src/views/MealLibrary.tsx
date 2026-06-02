@@ -1,10 +1,21 @@
-import { useState } from 'react';
-import type { MealType, Recipe } from '@meal-tracking/shared';
+import { useMemo, useState } from 'react';
+import type { MealType, Recipe, RecipeDetail } from '@meal-tracking/shared';
 import { useRecipes, useRecipeDetail, useDeleteRecipe } from '../query/recipes.js';
 import { useTags } from '../query/tags.js';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 import { RecipeEditor } from '../components/RecipeEditor.js';
 import { MacroBar } from '../components/MacroBar.js';
+import {
+  computeRecipeNutrition,
+  formatNutrition,
+  type NutritionLine,
+} from '@meal-tracking/nutrition-engine';
+import {
+  useIngredients,
+  toEngineNutrition,
+  absentMacrosOf,
+  type SavedIngredient,
+} from '../query/ingredients.js';
 
 /**
  * Meal Library view (AD-5, FR-1/FR-5).
@@ -27,6 +38,29 @@ import { MacroBar } from '../components/MacroBar.js';
 
 const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
+/** Build engine lines from a RecipeDetail + ingredient map — same as PlannedMealDetail. */
+function buildEngineLines(
+  detail: RecipeDetail,
+  byId: Map<string, SavedIngredient>,
+): NutritionLine[] {
+  return detail.ingredients.flatMap((usage) => {
+    const ing = byId.get(usage.ingredientId);
+    if (!ing) return [];
+    return [{
+      quantity: usage.quantity,
+      unitCode: usage.unitCode,
+      ingredient: {
+        id: ing.id,
+        referenceGrams: ing.referenceGrams,
+        gramEquivalents: ing.unitGramEquivalents,
+        gramWeightPerQty: ing.gramWeightPerQty,
+        nutrition: toEngineNutrition(ing.nutrition),
+        absentMacros: absentMacrosOf(ing.nutrition),
+      },
+    }];
+  });
+}
+
 /** Expanded detail panel for a single recipe row (AC-1.2, AC-1.3). */
 function RecipeDetailPanel({
   recipe,
@@ -38,8 +72,19 @@ function RecipeDetailPanel({
   onClose: () => void;
 }): JSX.Element {
   const detail = useRecipeDetail(recipe.id);
+  const ingredientsQuery = useIngredients();
   const deleteRecipe = useDeleteRecipe();
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Compute nutrition client-side via the shared engine — same pattern as
+  // PlannedMealDetail so the library and planner always agree on values.
+  const nutrition = useMemo(() => {
+    if (!detail.data || !ingredientsQuery.data) return null;
+    const byId = new Map(ingredientsQuery.data.map((i) => [i.id, i]));
+    const lines = buildEngineLines(detail.data, byId);
+    const result = computeRecipeNutrition(lines, recipe.servings);
+    return formatNutrition(result.perServing);
+  }, [detail.data, ingredientsQuery.data, recipe.servings]);
 
   function handleDelete(): void {
     deleteRecipe.mutate(recipe.id, { onSuccess: onClose });
@@ -47,24 +92,23 @@ function RecipeDetailPanel({
 
   return (
     <div className="recipe-row__detail">
-      {detail.isLoading ? (
+      {detail.isLoading || ingredientsQuery.isLoading ? (
         <p role="status">Loading...</p>
       ) : detail.isError ? (
         <p role="alert">Could not load recipe details.</p>
       ) : detail.data ? (
         <>
-          {/* Macro bars — prototype layout (CHANGE 2).
-              RecipeDetail does not carry pre-computed nutrition in this API
-              slice; bars show 0g as a placeholder so the visual structure
-              matches the prototype. A follow-up bundle can wire the
-              nutrition-engine client-side (as PlannedMealDetail does). */}
+          {/* Macro bars — real values from the shared engine (same as PlannedMealDetail) */}
           <div className="recipe-row__macro-bars">
             <dl className="macro-bars">
-              <MacroBar variant="protein" label="Protein" value={0} />
-              <MacroBar variant="carbs" label="Carbs" value={0} />
-              <MacroBar variant="fat" label="Fat" value={0} />
-              <MacroBar variant="fiber" label="Fiber" value={0} />
+              <MacroBar variant="protein" label="Protein" value={nutrition?.proteinG ?? 0} />
+              <MacroBar variant="carbs" label="Carbs" value={nutrition?.carbsG ?? 0} />
+              <MacroBar variant="fat" label="Fat" value={nutrition?.fatG ?? 0} />
+              <MacroBar variant="fiber" label="Fiber" value={nutrition?.fiberG ?? 0} />
             </dl>
+            {nutrition ? (
+              <p className="recipe-row__kcal">{nutrition.calories} kcal per serving</p>
+            ) : null}
           </div>
 
           {/* Ingredients as pill chips (CHANGE 2) */}
@@ -307,6 +351,11 @@ export function MealLibrary(): JSX.Element {
       {editorOpen ? (
         <RecipeEditor
           recipeId={editingRecipe?.id}
+          initialName={editingRecipe?.name ?? ''}
+          initialMealType={editingRecipe?.mealType ?? 'breakfast'}
+          initialServings={editingRecipe?.servings ?? 1}
+          initialNotes={editingRecipe?.notes ?? ''}
+          initialSourceLink={editingRecipe?.sourceLink ?? ''}
           onSaved={onSaved}
         />
       ) : null}

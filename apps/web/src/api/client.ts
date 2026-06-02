@@ -66,9 +66,11 @@ export async function apiFetch<T>(
     ...init,
   });
 
-  const body: unknown = await response
-    .json()
-    .catch(() => undefined);
+  // 204 No Content has no body — skip JSON parsing so .json() doesn't throw.
+  const body: unknown =
+    response.status === 204
+      ? undefined
+      : await response.json().catch(() => undefined);
 
   if (!response.ok) {
     if (isErrorEnvelope(body)) {

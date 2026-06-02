@@ -480,6 +480,12 @@ label {
   flex-wrap: wrap;
 }
 
+.recipe-row__kcal {
+  font-size: 11px;
+  color: var(--light);
+  margin: 6px 0 0;
+}
+
 /* ── Legacy filter div (kept for compatibility, now hidden) ────────────────── */
 .meal-library__filters {
   display: flex;
@@ -1186,23 +1192,21 @@ label {
   opacity: 0.5;
 }
 
+/* Meal card: a small container with the name + a remove × in the top-right. */
 .planner-grid__meal-card {
-  width: 100%;
-  text-align: left;
+  position: relative;
   background: var(--card);
-  border: none;
   border-radius: 6px;
-  padding: 6px;
-  cursor: pointer;
+  padding: 5px 20px 5px 6px; /* right padding makes room for the × button */
   transition: transform 0.2s, box-shadow 0.2s;
-  display: block;
+  margin-bottom: 3px;
 }
 .planner-grid__meal-card:hover {
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(58, 52, 40, 0.08);
 }
-/* Meal name displayed via CSS attr() so it appears visually but NOT in the
-   DOM's textContent — testing-library's findByText only searches text nodes. */
+/* The clickable card shows the name via ::before (data-label attr) so the text
+   is not a DOM text node and findByText won't find it twice. */
 .planner-grid__meal-card::before {
   content: attr(data-label);
   display: block;
@@ -1212,7 +1216,31 @@ label {
   color: var(--dark);
   word-break: break-word;
   line-height: 1.3;
-  white-space: pre-wrap;
+  padding-right: 14px; /* leave space for the × button */
+}
+/* × remove button in the top-right corner of the meal card. */
+.planner-grid__meal-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  background: none;
+  border: none;
+  padding: 0;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--light);
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background 0.15s, color 0.15s;
+}
+.planner-grid__meal-remove:hover {
+  background: rgba(196, 90, 90, 0.12);
+  color: var(--danger);
 }
 
 /* The overlay when a meal card is clicked (grid detail). */
