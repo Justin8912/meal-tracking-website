@@ -246,11 +246,12 @@ export function registerIngredientsRoutes(
       const workspaceId = await resolveWorkspaceId(_db);
       let row: IngredientRow | undefined;
       try {
-        // Insert-or-update: if the same fdc_id was already snapshotted, update
-        // its nutrition (particularly calories, which may have been NULL before
-        // the Atwater fix) so stale rows get corrected when the food is next
-        // used in a recipe. The partial unique index on (workspace_id, fdc_id)
-        // identifies the conflict target.
+        // Insert-or-update: try the insert first; if the partial unique index
+        // fires (same fdc_id already exists for this workspace), onConflictDoNothing
+        // returns an empty array. We then fetch the existing row and UPDATE its
+        // nutrition so stale calories (NULL pre-Atwater fix) are corrected.
+        // Note: onConflictDoUpdate cannot target a partial unique index by column
+        // list in Postgres — explicit UPDATE is the reliable alternative.
         const newCalories = p.calories !== undefined ? String(p.calories) : null;
         const inserted = await _db
           .insert(ingredients)
@@ -272,27 +273,12 @@ export function registerIngredientsRoutes(
             fiberG: p.fiberG !== undefined ? String(p.fiberG) : null,
             micronutrients: p.micronutrients,
           })
-          .onConflictDoUpdate({
-            target: [ingredients.workspaceId, ingredients.fdcId],
-            set: {
-              // Refresh nutrition from the latest USDA data. In particular,
-              // calories may have been NULL (pre-Atwater fix) and should now
-              // be populated. Leave other user-settable fields (name, gramWeightPerQty,
-              // unitGramEquivalents) unchanged so manual overrides are preserved.
-              calories: newCalories,
-              proteinG: p.proteinG !== undefined ? String(p.proteinG) : null,
-              carbsG: p.carbsG !== undefined ? String(p.carbsG) : null,
-              fatG: p.fatG !== undefined ? String(p.fatG) : null,
-              fiberG: p.fiberG !== undefined ? String(p.fiberG) : null,
-              micronutrients: p.micronutrients,
-              updatedAt: new Date(),
-            },
-          })
+          .onConflictDoNothing()
           .returning();
         row = inserted[0];
 
         if (!row) {
-          // Fallback — should not happen with onConflictDoUpdate but guard anyway.
+          // Conflict hit — fetch the existing row then refresh its nutrition.
           const existing = await _db
             .select()
             .from(ingredients)
@@ -304,6 +290,25 @@ export function registerIngredientsRoutes(
             )
             .limit(1);
           row = existing[0];
+
+          // Update nutrition so stale rows (e.g. calories=NULL from before the
+          // Atwater fix) are corrected the next time the food is used.
+          if (row) {
+            const updated = await _db
+              .update(ingredients)
+              .set({
+                calories: newCalories,
+                proteinG: p.proteinG !== undefined ? String(p.proteinG) : null,
+                carbsG: p.carbsG !== undefined ? String(p.carbsG) : null,
+                fatG: p.fatG !== undefined ? String(p.fatG) : null,
+                fiberG: p.fiberG !== undefined ? String(p.fiberG) : null,
+                micronutrients: p.micronutrients,
+                updatedAt: new Date(),
+              })
+              .where(eq(ingredients.id, row.id))
+              .returning();
+            row = updated[0] ?? row;
+          }
         }
       } catch (err) {
         throw new PersistenceError('Failed to snapshot USDA ingredient', {
