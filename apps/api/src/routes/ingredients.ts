@@ -67,6 +67,7 @@ const customIngredientInputSchema = z
     micronutrients: micronutrientMapSchema.optional(),
     gramWeightPerQty: z.number().positive().optional(),
     unitGramEquivalents: z.record(z.string(), z.number().positive()).optional(),
+    preferredUnit: z.string().default('g'),
   })
   .refine(
     (v) =>
@@ -100,6 +101,7 @@ const ingredientResponseSchema = z.object({
   referenceGrams: z.number().positive(),
   gramWeightPerQty: z.number().nullable(),
   unitGramEquivalents: z.record(z.string(), z.number()),
+  preferredUnit: z.string(),
   nutrition: per100gSchema,
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
@@ -140,6 +142,7 @@ export function toIngredientResponse(row: IngredientRow) {
     referenceGrams: Number(row.referenceGrams),
     gramWeightPerQty: numOrUndefined(row.gramWeightPerQty) ?? null,
     unitGramEquivalents: row.unitGramEquivalents,
+    preferredUnit: row.preferredUnit,
     nutrition,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -357,6 +360,7 @@ export function registerIngredientsRoutes(
               ? String(input.gramWeightPerQty)
               : null,
           unitGramEquivalents: input.unitGramEquivalents ?? {},
+          preferredUnit: input.preferredUnit,
           calories: input.calories !== undefined ? String(input.calories) : null,
           proteinG: input.proteinG !== undefined ? String(input.proteinG) : null,
           carbsG: input.carbsG !== undefined ? String(input.carbsG) : null,

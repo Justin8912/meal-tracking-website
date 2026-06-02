@@ -64,6 +64,15 @@ function lineFromSaved(
   };
 }
 
+/** Units available when adding a saved ingredient to a recipe. Custom
+ *  ingredients are restricted to their preferred unit; USDA ingredients allow all. */
+function availableUnitsFor(item: SavedIngredient): Array<{ code: string; label: string }> {
+  if (item.source === 'custom') {
+    return INGREDIENT_UNITS.filter((u) => u.code === item.preferredUnit);
+  }
+  return INGREDIENT_UNITS;
+}
+
 /** A saved ingredient row — shows name + source badge, then a quantity+unit
  *  confirm step before adding. Custom ingredients also have a delete button. */
 function SavedIngredientRow({
@@ -76,8 +85,10 @@ function SavedIngredientRow({
   const deleteIngredient = useDeleteIngredient();
   const [confirming, setConfirming] = useState(false);
   const [quantity, setQuantity] = useState('1');
-  const [unitCode, setUnitCode] = useState('g');
+  const [unitCode, setUnitCode] = useState(item.preferredUnit);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const units = availableUnitsFor(item);
 
   if (confirming) {
     return (
@@ -98,7 +109,7 @@ function SavedIngredientRow({
           onChange={(e) => setUnitCode(e.target.value)}
           className="ingredient-picker__unit-select"
         >
-          {INGREDIENT_UNITS.map((u) => (
+          {units.map((u) => (
             <option key={u.code} value={u.code}>{u.label}</option>
           ))}
         </select>
@@ -110,7 +121,7 @@ function SavedIngredientRow({
               onAdd(q, unitCode);
               setConfirming(false);
               setQuantity('1');
-              setUnitCode('g');
+              setUnitCode(item.preferredUnit);
             }
           }}
         >
@@ -366,9 +377,7 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
       {showCustom ? (
         <CustomIngredientForm
           onAdded={(saved) => {
-            // Newly created custom ingredient: default to referenceGrams in 'g'.
-            // The user can change quantity/unit in the recipe editor after adding.
-            onAdd(lineFromSaved(saved, saved.referenceGrams, 'g'));
+            onAdd(lineFromSaved(saved, 1, saved.preferredUnit));
             setShowCustom(false);
           }}
         />
@@ -377,44 +386,19 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
   );
 }
 
-/**
- * Custom-ingredient form (FR-3, AC-3.1). A name plus manually-entered nutrition
- * on a reference-grams basis; the API requires at least one nutrition fact
- * (S-3). On success the saved ingredient is handed back to the picker.
- */
-/** Available volume units (matches the seeded units table). */
-const VOLUME_UNITS = ['tsp', 'tbsp', 'fl oz', 'cup', 'quart'] as const;
-
-/**
- * Custom-ingredient form (FR-3, AC-3.1).
- *
- * Collects a name, macros (all optional — leaving fields blank is intentional,
- * NOT "missing data"), and optional measurement info so the ingredient can be
- * used in volume/qty units within a recipe:
- *   - Reference serving size (grams) — the gram basis for the macros (default 100g).
- *     E.g. "28g" if the label says "per 1 oz".
- *   - Grams per qty (optional) — for count-based units. E.g. "50" for an egg
- *     so "2 qty" correctly converts to 100g.
- *   - Volume gram-equivalents (optional) — how many grams per cup/tbsp/tsp/etc.
- *     E.g. flour: 125g/cup. Unlocks volume-unit selection in the recipe editor.
- */
 function CustomIngredientForm({
   onAdded,
 }: {
   onAdded: (saved: SavedIngredient) => void;
 }): JSX.Element {
   const [name, setName] = useState('');
+  const [servingAmount, setServingAmount] = useState('1');
+  const [servingUnit, setServingUnit] = useState('g');
   const [calories, setCalories] = useState('');
   const [proteinG, setProteinG] = useState('');
   const [carbsG, setCarbsG] = useState('');
   const [fatG, setFatG] = useState('');
   const [fiberG, setFiberG] = useState('');
-  // Measurement fields
-  const [referenceGrams, setReferenceGrams] = useState('100');
-  const [gramsPerQty, setGramsPerQty] = useState('');
-  // Volume gram-equivalents keyed by unit code
-  const [volumeGrams, setVolumeGrams] = useState<Record<string, string>>({});
-  const [showVolume, setShowVolume] = useState(false);
 
   const create = useCreateCustomIngredient();
 
@@ -425,27 +409,39 @@ function CustomIngredientForm({
   }
 
   function submitCustom(): void {
-    // Build unitGramEquivalents from only the volume units the user filled in.
-    const unitGramEquivalents: Record<string, number> = {};
-    for (const [unit, val] of Object.entries(volumeGrams)) {
-      const n = parseNum(val);
-      if (n !== undefined && n > 0) unitGramEquivalents[unit] = n;
+    const amount = parseNum(servingAmount) ?? 1;
+
+    // Derive the engine fields from the chosen serving unit + amount.
+    // For non-gram units we use a virtual-gram model (referenceGrams=1) so
+    // the user never needs to know gram weights. The preferred unit recorded
+    // on the ingredient restricts the recipe editor to that unit only.
+    let referenceGrams: number;
+    let gramWeightPerQty: number | undefined;
+    let unitGramEquivalents: Record<string, number> | undefined;
+
+    if (servingUnit === 'g') {
+      referenceGrams = amount;
+    } else if (servingUnit === 'qty') {
+      referenceGrams = 1;
+      gramWeightPerQty = 1 / amount;
+    } else {
+      // oz and all volume units
+      referenceGrams = 1;
+      unitGramEquivalents = { [servingUnit]: 1 / amount };
     }
 
     create.mutate(
       {
         name: name.trim(),
-        referenceGrams: parseNum(referenceGrams) ?? 100,
+        referenceGrams,
         calories: parseNum(calories),
         proteinG: parseNum(proteinG),
         carbsG: parseNum(carbsG),
         fatG: parseNum(fatG),
         fiberG: parseNum(fiberG),
-        gramWeightPerQty: parseNum(gramsPerQty),
-        unitGramEquivalents:
-          Object.keys(unitGramEquivalents).length > 0
-            ? unitGramEquivalents
-            : undefined,
+        gramWeightPerQty,
+        unitGramEquivalents,
+        preferredUnit: servingUnit,
       },
       { onSuccess: onAdded },
     );
@@ -464,7 +460,7 @@ function CustomIngredientForm({
       }}
     >
       <label>
-        Custom ingredient name
+        Name
         <input
           type="text"
           value={name}
@@ -473,9 +469,31 @@ function CustomIngredientForm({
         />
       </label>
 
-      {/* Nutrition — per the reference serving size below */}
+      <p className="ingredient-picker__custom-section">Serving size</p>
+      <div className="ingredient-picker__serving-row">
+        <input
+          type="number"
+          min={0.01}
+          step="any"
+          value={servingAmount}
+          aria-label="Serving amount"
+          onChange={(e) => setServingAmount(e.target.value)}
+          className="ingredient-picker__amount-input"
+        />
+        <select
+          value={servingUnit}
+          aria-label="Serving unit"
+          onChange={(e) => setServingUnit(e.target.value)}
+          className="ingredient-picker__unit-select"
+        >
+          {INGREDIENT_UNITS.map((u) => (
+            <option key={u.code} value={u.code}>{u.label}</option>
+          ))}
+        </select>
+      </div>
+
       <p className="ingredient-picker__custom-section">
-        Nutrition facts (per serving)
+        Nutrition per serving
       </p>
       <div className="ingredient-picker__custom-grid">
         <label>
@@ -503,59 +521,7 @@ function CustomIngredientForm({
           <input type="number" min={0} step="any" value={fiberG}
             onChange={(e) => setFiberG(e.target.value)} />
         </label>
-        <label>
-          Serving size (g)
-          <input type="number" min={1} step="any" value={referenceGrams}
-            onChange={(e) => setReferenceGrams(e.target.value)}
-            title="How many grams is one serving? Nutrition values above are per this amount." />
-        </label>
       </div>
-
-      {/* Optional: grams per count unit (qty) */}
-      <label>
-        Grams per piece / count (optional)
-        <input
-          type="number"
-          min={0}
-          step="any"
-          value={gramsPerQty}
-          placeholder="e.g. 50 for an egg"
-          onChange={(e) => setGramsPerQty(e.target.value)}
-          title='Allows you to enter "2 qty" in a recipe. Leave blank if not applicable.'
-        />
-      </label>
-
-      {/* Optional: volume gram-equivalents */}
-      <button
-        type="button"
-        className="ingredient-picker__toggle-volume"
-        onClick={() => setShowVolume((v) => !v)}
-        aria-expanded={showVolume}
-      >
-        {showVolume ? 'Hide' : 'Add'} volume conversions (optional)
-      </button>
-      {showVolume ? (
-        <div className="ingredient-picker__volume-grid">
-          <p className="ingredient-picker__custom-section">
-            How many grams per volume unit? (leave blank if not applicable)
-          </p>
-          {VOLUME_UNITS.map((unit) => (
-            <label key={unit}>
-              {unit}
-              <input
-                type="number"
-                min={0}
-                step="any"
-                value={volumeGrams[unit] ?? ''}
-                placeholder="grams"
-                onChange={(e) =>
-                  setVolumeGrams((prev) => ({ ...prev, [unit]: e.target.value }))
-                }
-              />
-            </label>
-          ))}
-        </div>
-      ) : null}
 
       {create.error ? (
         <p role="alert">Could not create ingredient: {create.error.message}</p>

@@ -1028,7 +1028,8 @@ label {
 }
 
 /* Amount + unit side-by-side row inside the confirm panel */
-.ingredient-picker__amount-row {
+.ingredient-picker__amount-row,
+.ingredient-picker__serving-row {
   display: flex;
   gap: 8px;
   align-items: flex-end;

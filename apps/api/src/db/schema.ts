@@ -83,6 +83,7 @@ export const ingredients = pgTable(
       .$type<Record<string, Micronutrient>>()
       .notNull()
       .default({}),
+    preferredUnit: text('preferred_unit').notNull().default('g'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

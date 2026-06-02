@@ -45,6 +45,7 @@ export interface SavedIngredient {
   referenceGrams: number;
   gramWeightPerQty: number | null;
   unitGramEquivalents: Record<string, number>;
+  preferredUnit: string;
   nutrition: {
     calories?: number;
     proteinG?: number;
@@ -181,6 +182,7 @@ export interface CustomIngredientInput {
   micronutrients?: Record<string, Micronutrient>;
   gramWeightPerQty?: number;
   unitGramEquivalents?: Record<string, number>;
+  preferredUnit: string;
 }
 
 async function createCustomIngredient(
