@@ -933,8 +933,42 @@ label {
 }
 
 .ingredient-picker__confirm {
-  flex-flow: row wrap;
+  flex-direction: column;
+}
+
+/* Amount + unit side-by-side row inside the confirm panel */
+.ingredient-picker__amount-row {
+  display: flex;
+  gap: 8px;
   align-items: flex-end;
+}
+
+.ingredient-picker__amount-input {
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.ingredient-picker__unit-select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Saved ingredient confirm row (quantity + unit inline) */
+.ingredient-picker__saved-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--card-alt);
+  border-radius: var(--radius-control);
+}
+
+.ingredient-picker__saved-confirm-name {
+  flex: 1 1 100%;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--med);
 }
 
 .ingredient-picker__custom label {

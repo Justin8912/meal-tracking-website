@@ -100,11 +100,12 @@ describe('IngredientPicker', () => {
       ),
     ).toBe(true);
 
-    // Selecting the match reveals a pre-filled, confirmable gram weight (AD-4).
+    // Selecting the match reveals a pre-filled quantity + unit selector (AD-4).
     fireEvent.click(screen.getByRole('button', { name: /select Chicken breast/i }));
 
-    const gramInput = (await screen.findByLabelText(
-      /gram weight/i,
+    // The confirm panel shows "Amount" label and a "Unit" dropdown.
+    const gramInput = (await screen.findByRole(
+      'spinbutton', { name: /amount/i },
     )) as HTMLInputElement;
     expect(Number(gramInput.value)).toBeGreaterThan(0);
 

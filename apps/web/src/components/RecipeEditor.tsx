@@ -13,7 +13,7 @@ import type {
 import { recipeInputSchema } from '@meal-tracking/shared';
 import { useSaveRecipe } from '../query/recipes.js';
 import { ApiError } from '../api/client.js';
-import { IngredientPicker } from './IngredientPicker.js';
+import { IngredientPicker, INGREDIENT_UNITS } from './IngredientPicker.js';
 import { MacroBar } from './MacroBar.js';
 
 /**
@@ -298,14 +298,17 @@ export function RecipeEditor({
                   </label>
                   <label>
                     Unit
-                    <input
-                      type="text"
+                    <select
                       aria-label={`Unit for ${line.name}`}
                       value={line.unitCode}
                       onChange={(e) =>
                         updateLine(line.key, { unitCode: e.target.value })
                       }
-                    />
+                    >
+                      {INGREDIENT_UNITS.map((u) => (
+                        <option key={u.code} value={u.code}>{u.label}</option>
+                      ))}
+                    </select>
                   </label>
                   {lineMissing ? (
                     <span role="note" className="recipe-editor__line-incomplete">

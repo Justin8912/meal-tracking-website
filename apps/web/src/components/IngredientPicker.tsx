@@ -30,47 +30,102 @@ export interface IngredientPickerProps {
   onAdd: (line: Omit<EditorIngredientLine, 'key'>) => void;
 }
 
-/** Build the editor line from a saved ingredient and the confirmed grams. */
+/** The units available in the recipe editor, matching the seeded units table. */
+export const INGREDIENT_UNITS: Array<{ code: string; label: string }> = [
+  { code: 'g',      label: 'gram' },
+  { code: 'oz',     label: 'ounce' },
+  { code: 'tsp',    label: 'teaspoon' },
+  { code: 'tbsp',   label: 'tablespoon' },
+  { code: 'fl oz',  label: 'fluid ounce' },
+  { code: 'cup',    label: 'cup' },
+  { code: 'quart',  label: 'quart' },
+  { code: 'qty',    label: 'quantity' },
+];
+
+/** Build the editor line from a saved ingredient, quantity, and unit. */
 function lineFromSaved(
   saved: SavedIngredient,
-  grams: number,
+  quantity: number,
+  unitCode: string,
 ): Omit<EditorIngredientLine, 'key'> {
   return {
     ingredientId: saved.id,
     name: saved.name,
-    // The confirmed grams are the usage; unit 'g' passes straight through the
-    // engine against the ingredient's reference-grams nutrition basis (AD-4).
-    quantity: grams,
-    unitCode: 'g',
+    quantity,
+    unitCode,
     nutrition: toEngineNutrition(saved.nutrition),
     referenceGrams: saved.referenceGrams,
     gramEquivalents: saved.unitGramEquivalents,
     gramWeightPerQty: saved.gramWeightPerQty,
     // Custom ingredients are user-defined — blank fields are intentional, not
     // unknown/absent. Only flag absent macros for USDA-sourced ingredients where
-    // we know the API omitted data. This prevents the "incomplete data" badge
-    // on a custom ingredient the user fully filled out.
+    // we know the API omitted data.
     absentMacros: saved.source === 'custom' ? [] : absentMacrosOf(saved.nutrition),
   };
 }
 
-/** A saved ingredient row — same visual style as USDA results, with a delete
- *  trash-can button for custom ingredients (confirm before deleting). */
+/** A saved ingredient row — shows name + source badge, then a quantity+unit
+ *  confirm step before adding. Custom ingredients also have a delete button. */
 function SavedIngredientRow({
   item,
   onAdd,
 }: {
   item: SavedIngredient;
-  onAdd: () => void;
+  onAdd: (quantity: number, unitCode: string) => void;
 }): JSX.Element {
   const deleteIngredient = useDeleteIngredient();
+  const [confirming, setConfirming] = useState(false);
+  const [quantity, setQuantity] = useState('1');
+  const [unitCode, setUnitCode] = useState('g');
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  if (confirming) {
+    return (
+      <li className="ingredient-picker__saved-confirm">
+        <span className="ingredient-picker__saved-confirm-name">{item.name}</span>
+        <input
+          type="number"
+          min={0}
+          step="any"
+          value={quantity}
+          aria-label="Amount"
+          onChange={(e) => setQuantity(e.target.value)}
+          className="ingredient-picker__amount-input"
+        />
+        <select
+          value={unitCode}
+          aria-label="Unit"
+          onChange={(e) => setUnitCode(e.target.value)}
+          className="ingredient-picker__unit-select"
+        >
+          {INGREDIENT_UNITS.map((u) => (
+            <option key={u.code} value={u.code}>{u.label}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => {
+            const q = Number.parseFloat(quantity);
+            if (!Number.isNaN(q) && q > 0) {
+              onAdd(q, unitCode);
+              setConfirming(false);
+              setQuantity('1');
+              setUnitCode('g');
+            }
+          }}
+        >
+          Add
+        </button>
+        <button type="button" onClick={() => setConfirming(false)}>Cancel</button>
+      </li>
+    );
+  }
 
   return (
     <li>
       <span>{item.name}</span>
       <span> ({item.source === 'custom' ? 'custom' : 'saved'})</span>
-      <button type="button" onClick={onAdd} aria-label={`Add ${item.name}`}>
+      <button type="button" onClick={() => setConfirming(true)} aria-label={`Add ${item.name}`}>
         Add
       </button>
       {item.source === 'custom' ? (
@@ -85,12 +140,7 @@ function SavedIngredientRow({
             >
               {deleteIngredient.isPending ? '...' : 'Yes, remove'}
             </button>
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(false)}
-            >
-              Cancel
-            </button>
+            <button type="button" onClick={() => setConfirmDelete(false)}>Cancel</button>
           </span>
         ) : (
           <button
@@ -123,16 +173,17 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
     : [];
 
   const [selected, setSelected] = useState<UsdaSearchItem | null>(null);
-  // Pre-filled, confirmable gram weight for the selected USDA food (AD-4). The
-  // 100g reference is a sensible default the user can override before adding.
-  const [grams, setGrams] = useState(100);
+  // Quantity and unit for the selected USDA food (AD-4). Defaults to 100g.
+  const [confirmQty, setConfirmQty] = useState(100);
+  const [confirmUnit, setConfirmUnit] = useState('g');
   const snapshot = useSnapshotUsdaIngredient();
 
   const [showCustom, setShowCustom] = useState(false);
 
   function handleSelect(item: UsdaSearchItem): void {
     setSelected(item);
-    setGrams(100);
+    setConfirmQty(100);
+    setConfirmUnit('g');
   }
 
   // Enter inside a picker input must NOT submit the surrounding recipe <form>
@@ -153,7 +204,7 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
       { fdcId: selected.fdcId },
       {
         onSuccess: (saved) => {
-          onAdd(lineFromSaved(saved, grams));
+          onAdd(lineFromSaved(saved, confirmQty, confirmUnit));
           setSelected(null);
           setTerm('');
         },
@@ -198,7 +249,7 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
             <SavedIngredientRow
               key={item.id}
               item={item}
-              onAdd={() => onAdd(lineFromSaved(item, item.referenceGrams))}
+              onAdd={(qty, unit) => onAdd(lineFromSaved(item, qty, unit))}
             />
           ))}
         </ul>
@@ -233,20 +284,35 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
           aria-label="Confirm ingredient amount"
         >
           <p>Adding: {selected.description}</p>
-          <label>
-            Gram weight
-            <input
-              type="number"
-              min={0}
-              step="any"
-              value={grams}
-              onChange={(e) => {
-                const next = Number.parseFloat(e.target.value);
-                setGrams(Number.isNaN(next) ? 0 : next);
-              }}
-              onKeyDown={onEnter(confirmUsda)}
-            />
-          </label>
+          <div className="ingredient-picker__amount-row">
+            <label>
+              Amount
+              <input
+                type="number"
+                min={0}
+                step="any"
+                value={confirmQty}
+                onChange={(e) => {
+                  const next = Number.parseFloat(e.target.value);
+                  setConfirmQty(Number.isNaN(next) ? 0 : next);
+                }}
+                onKeyDown={onEnter(confirmUsda)}
+                className="ingredient-picker__amount-input"
+              />
+            </label>
+            <label>
+              Unit
+              <select
+                value={confirmUnit}
+                onChange={(e) => setConfirmUnit(e.target.value)}
+                className="ingredient-picker__unit-select"
+              >
+                {INGREDIENT_UNITS.map((u) => (
+                  <option key={u.code} value={u.code}>{u.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
           {snapshot.error ? (
             <p role="alert">
               Could not add ingredient: {snapshot.error.message}
@@ -276,7 +342,9 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
       {showCustom ? (
         <CustomIngredientForm
           onAdded={(saved) => {
-            onAdd(lineFromSaved(saved, saved.referenceGrams));
+            // Newly created custom ingredient: default to referenceGrams in 'g'.
+            // The user can change quantity/unit in the recipe editor after adding.
+            onAdd(lineFromSaved(saved, saved.referenceGrams, 'g'));
             setShowCustom(false);
           }}
         />
