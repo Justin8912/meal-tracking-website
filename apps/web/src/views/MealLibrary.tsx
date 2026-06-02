@@ -3,7 +3,7 @@ import type { MealType, Recipe, RecipeDetail } from '@meal-tracking/shared';
 import { useRecipes, useRecipeDetail, useDeleteRecipe } from '../query/recipes.js';
 import { useTags } from '../query/tags.js';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
-import { RecipeEditor } from '../components/RecipeEditor.js';
+import { RecipeEditor, type EditorIngredientLine } from '../components/RecipeEditor.js';
 import { MacroBar } from '../components/MacroBar.js';
 import {
   computeRecipeNutrition,
@@ -61,6 +61,31 @@ function buildEngineLines(
   });
 }
 
+/** Build EditorIngredientLine[] from a RecipeDetail + saved ingredient map. */
+function buildEditorLines(
+  detail: RecipeDetail,
+  byId: Map<string, SavedIngredient>,
+): EditorIngredientLine[] {
+  let counter = 0;
+  return detail.ingredients.flatMap((usage) => {
+    const ing = byId.get(usage.ingredientId);
+    if (!ing) return [];
+    counter += 1;
+    return [{
+      key: `edit-${usage.ingredientId}-${counter}`,
+      ingredientId: ing.id,
+      name: ing.name,
+      quantity: usage.quantity,
+      unitCode: usage.unitCode,
+      nutrition: toEngineNutrition(ing.nutrition),
+      referenceGrams: ing.referenceGrams,
+      gramEquivalents: ing.unitGramEquivalents,
+      gramWeightPerQty: ing.gramWeightPerQty,
+      absentMacros: absentMacrosOf(ing.nutrition),
+    }];
+  });
+}
+
 /** Expanded detail panel for a single recipe row (AC-1.2, AC-1.3). */
 function RecipeDetailPanel({
   recipe,
@@ -68,7 +93,7 @@ function RecipeDetailPanel({
   onClose,
 }: {
   recipe: Recipe;
-  onEdit: () => void;
+  onEdit: (initialIngredients: EditorIngredientLine[], initialTags: string[]) => void;
   onClose: () => void;
 }): JSX.Element {
   const detail = useRecipeDetail(recipe.id);
@@ -85,6 +110,16 @@ function RecipeDetailPanel({
     const result = computeRecipeNutrition(lines, recipe.servings);
     return formatNutrition(result.perServing);
   }, [detail.data, ingredientsQuery.data, recipe.servings]);
+
+  function handleEdit(): void {
+    if (!detail.data || !ingredientsQuery.data) {
+      // Data not yet loaded — open editor without ingredients (fallback)
+      onEdit([], []);
+      return;
+    }
+    const byId = new Map(ingredientsQuery.data.map((i) => [i.id, i]));
+    onEdit(buildEditorLines(detail.data, byId), detail.data.tags);
+  }
 
   function handleDelete(): void {
     deleteRecipe.mutate(recipe.id, { onSuccess: onClose });
@@ -155,7 +190,7 @@ function RecipeDetailPanel({
 
       {/* Actions */}
       <div className="recipe-row__actions">
-        <button type="button" className="btn btn--secondary" onClick={onEdit}>
+        <button type="button" className="btn btn--secondary" onClick={handleEdit}>
           Edit
         </button>
         {confirmDelete ? (
@@ -200,6 +235,8 @@ export function MealLibrary(): JSX.Element {
   const [searchTerm, setSearchTerm] = useState('');
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
+  const [editIngredients, setEditIngredients] = useState<EditorIngredientLine[]>([]);
+  const [editTags, setEditTags] = useState<string[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
@@ -217,12 +254,20 @@ export function MealLibrary(): JSX.Element {
 
   function openAddEditor(): void {
     setEditingRecipe(null);
+    setEditIngredients([]);
+    setEditTags([]);
     setEditorOpen(true);
     setExpandedId(null);
   }
 
-  function openEditEditor(recipe: Recipe): void {
+  function openEditEditor(
+    recipe: Recipe,
+    ingredients: EditorIngredientLine[],
+    tags: string[],
+  ): void {
     setEditingRecipe(recipe);
+    setEditIngredients(ingredients);
+    setEditTags(tags);
     setEditorOpen(true);
     setExpandedId(null);
   }
@@ -361,6 +406,8 @@ export function MealLibrary(): JSX.Element {
           initialServings={editingRecipe?.servings ?? 1}
           initialNotes={editingRecipe?.notes ?? ''}
           initialSourceLink={editingRecipe?.sourceLink ?? ''}
+          initialTags={editTags}
+          initialIngredients={editIngredients}
           onSaved={onSaved}
         />
       ) : null}
@@ -410,7 +457,7 @@ export function MealLibrary(): JSX.Element {
                 {isExpanded ? (
                   <RecipeDetailPanel
                     recipe={recipe}
-                    onEdit={() => openEditEditor(recipe)}
+                    onEdit={(ings, tags) => openEditEditor(recipe, ings, tags)}
                     onClose={() => setExpandedId(null)}
                   />
                 ) : null}

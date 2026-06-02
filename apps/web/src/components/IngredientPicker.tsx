@@ -3,6 +3,7 @@ import { ApiError } from '../api/client.js';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 import {
   useIngredientSearch,
+  useIngredients,
   useSnapshotUsdaIngredient,
   useCreateCustomIngredient,
   toEngineNutrition,
@@ -55,6 +56,15 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
   const [term, setTerm] = useState('');
   const debouncedTerm = useDebouncedValue(term, 300);
   const search = useIngredientSearch(debouncedTerm);
+  // Workspace's already-saved ingredients (custom + USDA snapshots). Filtered
+  // client-side against the search term so custom ingredients appear in search
+  // results without a separate server round-trip (AC-3.3).
+  const savedQuery = useIngredients();
+  const savedMatches: SavedIngredient[] = debouncedTerm.trim().length > 0
+    ? (savedQuery.data ?? []).filter((i) =>
+        i.name.toLowerCase().includes(debouncedTerm.toLowerCase()),
+      )
+    : [];
 
   const [selected, setSelected] = useState<UsdaSearchItem | null>(null);
   // Pre-filled, confirmable gram weight for the selected USDA food (AD-4). The
@@ -122,6 +132,29 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
         </p>
       ) : null}
 
+      {/* Saved ingredients (custom + previously snapshotted) that match the
+          search term — shown above USDA results so custom ingredients are easy
+          to find and reuse (AC-3.3). */}
+      {savedMatches.length > 0 ? (
+        <ul aria-label="Saved ingredients">
+          {savedMatches.map((item) => (
+            <li key={item.id}>
+              <span>{item.name}</span>
+              <span> ({item.source === 'custom' ? 'custom' : 'saved'})</span>
+              <button
+                type="button"
+                onClick={() => {
+                  onAdd(lineFromSaved(item, item.referenceGrams));
+                }}
+                aria-label={`Add saved ${item.name}`}
+              >
+                Add
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
       {search.data && search.data.length > 0 ? (
         <ul aria-label="Search results">
           {search.data.map((item) => (
@@ -140,7 +173,7 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
         </ul>
       ) : null}
 
-      {search.data && search.data.length === 0 && debouncedTerm.trim() !== '' ? (
+      {search.data && search.data.length === 0 && savedMatches.length === 0 && debouncedTerm.trim() !== '' ? (
         <p>No foods found. Try a different term or add a custom ingredient.</p>
       ) : null}
 
