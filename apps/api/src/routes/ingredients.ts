@@ -246,10 +246,12 @@ export function registerIngredientsRoutes(
       const workspaceId = await resolveWorkspaceId(_db);
       let row: IngredientRow | undefined;
       try {
-        // Insert-or-fetch: if the same fdc_id was already snapshotted for this
-        // workspace, the partial unique index fires. onConflictDoNothing()
-        // returns an empty array; we then fetch the existing row and return it
-        // so the caller always gets a valid ingredient (never a duplicate).
+        // Insert-or-update: if the same fdc_id was already snapshotted, update
+        // its nutrition (particularly calories, which may have been NULL before
+        // the Atwater fix) so stale rows get corrected when the food is next
+        // used in a recipe. The partial unique index on (workspace_id, fdc_id)
+        // identifies the conflict target.
+        const newCalories = p.calories !== undefined ? String(p.calories) : null;
         const inserted = await _db
           .insert(ingredients)
           .values({
@@ -263,19 +265,34 @@ export function registerIngredientsRoutes(
                 ? String(parsedBody.data.gramWeightPerQty)
                 : null,
             unitGramEquivalents: parsedBody.data.unitGramEquivalents ?? {},
-            calories: p.calories !== undefined ? String(p.calories) : null,
+            calories: newCalories,
             proteinG: p.proteinG !== undefined ? String(p.proteinG) : null,
             carbsG: p.carbsG !== undefined ? String(p.carbsG) : null,
             fatG: p.fatG !== undefined ? String(p.fatG) : null,
             fiberG: p.fiberG !== undefined ? String(p.fiberG) : null,
             micronutrients: p.micronutrients,
           })
-          .onConflictDoNothing()
+          .onConflictDoUpdate({
+            target: [ingredients.workspaceId, ingredients.fdcId],
+            set: {
+              // Refresh nutrition from the latest USDA data. In particular,
+              // calories may have been NULL (pre-Atwater fix) and should now
+              // be populated. Leave other user-settable fields (name, gramWeightPerQty,
+              // unitGramEquivalents) unchanged so manual overrides are preserved.
+              calories: newCalories,
+              proteinG: p.proteinG !== undefined ? String(p.proteinG) : null,
+              carbsG: p.carbsG !== undefined ? String(p.carbsG) : null,
+              fatG: p.fatG !== undefined ? String(p.fatG) : null,
+              fiberG: p.fiberG !== undefined ? String(p.fiberG) : null,
+              micronutrients: p.micronutrients,
+              updatedAt: new Date(),
+            },
+          })
           .returning();
         row = inserted[0];
 
-        // Conflict hit: an identical snapshot already exists — fetch it.
         if (!row) {
+          // Fallback — should not happen with onConflictDoUpdate but guard anyway.
           const existing = await _db
             .select()
             .from(ingredients)
