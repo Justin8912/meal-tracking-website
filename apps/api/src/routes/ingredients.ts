@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, count } from 'drizzle-orm';
 import { z } from 'zod';
 import { micronutrientSchema } from '@meal-tracking/shared';
 import type { Micronutrient } from '@meal-tracking/shared';
 import type { Db } from '../db/client.js';
-import { ingredients, type IngredientRow } from '../db/schema.js';
+import { ingredients, recipeIngredients, type IngredientRow } from '../db/schema.js';
 import { PersistenceError } from '../db/persist.js';
 import { resolveWorkspaceId } from '../workspace.js';
 import { UsdaError, type UsdaClient } from '../usda/client.js';
@@ -389,11 +389,20 @@ export function registerIngredientsRoutes(
           error: { code: 'NOT_FOUND', message: 'Ingredient not found' },
         });
       }
-      if (row.source !== 'custom') {
+
+      // Guard: refuse to delete an ingredient that is still used in a recipe.
+      // The recipe_ingredients FK has no ON DELETE clause (RESTRICT by default),
+      // so the DB would reject it anyway — surface a clear message first.
+      const usageResult = await _db
+        .select({ n: count() })
+        .from(recipeIngredients)
+        .where(eq(recipeIngredients.ingredientId, id));
+      const usageCount = Number(usageResult[0]?.n ?? 0);
+      if (usageCount > 0) {
         return reply.code(400).send({
           error: {
-            code: 'NOT_DELETABLE',
-            message: 'Only custom ingredients can be deleted. USDA-sourced ingredients are shared reference data.',
+            code: 'INGREDIENT_IN_USE',
+            message: `This ingredient is used in ${usageCount} recipe${usageCount === 1 ? '' : 's'} and cannot be removed. Delete it from those recipes first.`,
           },
         });
       }

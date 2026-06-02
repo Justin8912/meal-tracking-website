@@ -124,36 +124,44 @@ function SavedIngredientRow({
   return (
     <li>
       <span>{item.name}</span>
-      <span> ({item.source === 'custom' ? 'custom' : 'saved'})</span>
+      <span> ({item.source === 'custom' ? 'custom' : 'usda'})</span>
       <button type="button" onClick={() => setConfirming(true)} aria-label={`Add ${item.name}`}>
         Add
       </button>
-      {item.source === 'custom' ? (
-        confirmDelete ? (
-          <span className="ingredient-picker__delete-confirm">
-            <span>Remove permanently?</span>
-            <button
-              type="button"
-              className="ingredient-picker__delete-yes"
-              disabled={deleteIngredient.isPending}
-              onClick={() => deleteIngredient.mutate(item.id, { onSuccess: () => setConfirmDelete(false) })}
-            >
-              {deleteIngredient.isPending ? '...' : 'Yes, remove'}
-            </button>
-            <button type="button" onClick={() => setConfirmDelete(false)}>Cancel</button>
-          </span>
-        ) : (
+      {confirmDelete ? (
+        <span className="ingredient-picker__delete-confirm">
+          <span>Remove permanently?</span>
           <button
             type="button"
-            className="ingredient-picker__delete-btn"
-            aria-label={`Delete custom ingredient ${item.name}`}
-            title="Remove this custom ingredient permanently"
-            onClick={() => setConfirmDelete(true)}
+            className="ingredient-picker__delete-yes"
+            disabled={deleteIngredient.isPending}
+            onClick={() =>
+              deleteIngredient.mutate(item.id, {
+                onSuccess: () => setConfirmDelete(false),
+                onError: () => setConfirmDelete(false),
+              })
+            }
           >
-            ×
+            {deleteIngredient.isPending ? '...' : 'Yes, remove'}
           </button>
-        )
-      ) : null}
+          <button type="button" onClick={() => setConfirmDelete(false)}>Cancel</button>
+          {deleteIngredient.error ? (
+            <span className="ingredient-picker__delete-error">
+              {deleteIngredient.error.message}
+            </span>
+          ) : null}
+        </span>
+      ) : (
+        <button
+          type="button"
+          className="ingredient-picker__delete-btn"
+          aria-label={`Delete ${item.name}`}
+          title="Remove this ingredient from your saved list"
+          onClick={() => setConfirmDelete(true)}
+        >
+          ×
+        </button>
+      )}
     </li>
   );
 }

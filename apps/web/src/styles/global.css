@@ -1144,6 +1144,14 @@ label {
   cursor: pointer;
 }
 
+/* Inline error shown when delete is rejected (e.g., ingredient in use) */
+.ingredient-picker__delete-error {
+  color: var(--danger);
+  font-size: 10px;
+  flex: 1 1 100%;
+  margin-top: 2px;
+}
+
 /* Small delete × button next to custom saved ingredients */
 .ingredient-picker__delete-btn {
   background: none;
