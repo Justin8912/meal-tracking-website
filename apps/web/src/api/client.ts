@@ -61,8 +61,16 @@ export async function apiFetch<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
+  // Only set Content-Type: application/json when there is a body — DELETE and
+  // bodiless GET requests must not carry the header or Fastify returns
+  // FST_ERR_CTP_EMPTY_JSON_BODY ("Body cannot be empty when content-type is
+  // set to 'application/json'").
+  const hasBody = init?.body != null;
   const response = await fetch(buildUrl(path), {
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    headers: {
+      ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.headers ?? {}),
+    },
     ...init,
   });
 

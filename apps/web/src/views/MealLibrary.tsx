@@ -349,7 +349,12 @@ export function MealLibrary(): JSX.Element {
       </div>
 
       {editorOpen ? (
+        // key forces React to fully remount the editor when switching between
+        // "new recipe" (key='new') and a specific recipe (key=recipeId) — without
+        // it useState inside RecipeEditor keeps stale values from the previous
+        // render so the edit form shows the wrong recipe.
         <RecipeEditor
+          key={editingRecipe?.id ?? 'new'}
           recipeId={editingRecipe?.id}
           initialName={editingRecipe?.name ?? ''}
           initialMealType={editingRecipe?.mealType ?? 'breakfast'}
