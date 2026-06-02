@@ -257,19 +257,35 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
 
       {search.data && search.data.length > 0 ? (
         <ul aria-label="Search results">
-          {search.data.map((item) => (
-            <li key={item.fdcId}>
-              <span>{item.description}</span>
-              <span> ({item.dataType})</span>
-              <button
-                type="button"
-                onClick={() => handleSelect(item)}
-                aria-label={`Select ${item.description}`}
-              >
-                Add
-              </button>
-            </li>
-          ))}
+          {search.data.map((item) => {
+            const p = item.per100g;
+            const macros = [
+              p.calories !== undefined ? `${Math.round(p.calories)} kcal` : null,
+              p.proteinG !== undefined ? `${p.proteinG.toFixed(1)}g P` : null,
+              p.carbsG !== undefined ? `${p.carbsG.toFixed(1)}g C` : null,
+              p.fatG !== undefined ? `${p.fatG.toFixed(1)}g F` : null,
+            ].filter(Boolean).join(' · ');
+            return (
+              <li key={item.fdcId}>
+                <div className="ingredient-picker__result-info">
+                  <span className="ingredient-picker__result-name">
+                    {item.description}
+                  </span>
+                  <span className="ingredient-picker__result-meta">
+                    {item.dataType}
+                    {macros ? ` · ${macros} per 100g` : ''}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSelect(item)}
+                  aria-label={`Select ${item.description}`}
+                >
+                  Add
+                </button>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
 
