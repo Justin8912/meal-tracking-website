@@ -66,7 +66,7 @@ describe('USDA client (unit, stubbed fetch)', () => {
 
     expect(results).toHaveLength(1);
     expect(results[0]!.fdcId).toBe('171705');
-    expect(results[0]!.per100g.calories).toBe(120);
+    expect(results[0]!.per100g.calories).toBe(90);
     expect(results[0]!.per100g.proteinG).toBe(22.5);
 
     // The request URL carried the key and the Foundation+SR dataType (F-8).
@@ -99,7 +99,7 @@ describe('USDA client (unit, stubbed fetch)', () => {
 
     const food = await client.getFood('171705');
     expect(food.fdcId).toBe('171705');
-    expect(food.per100g.calories).toBe(120);
+    expect(food.per100g.calories).toBe(90);
     expect(food.per100g.proteinG).toBe(22.5);
   });
 

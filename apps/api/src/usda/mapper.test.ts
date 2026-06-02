@@ -69,7 +69,7 @@ describe('USDA nutrient-number mapper (unit)', () => {
     expect(out.fdcId).toBe('171705');
     expect(out.description).toBe(SEARCH_ITEM.description);
     expect(out.dataType).toBe('SR Legacy');
-    expect(out.per100g.calories).toBe(120);
+    expect(out.per100g.calories).toBe(113.6);
     expect(out.per100g.proteinG).toBe(22.5);
     expect(out.per100g.fatG).toBe(2.62);
     expect(out.per100g.carbsG).toBe(0);
@@ -94,7 +94,7 @@ describe('USDA nutrient-number mapper (unit)', () => {
 
   it('OMITS missing nutrients (does not zero-fill them - F-8/S-6)', () => {
     const out = mapSearchFood(SEARCH_ITEM_SPARSE);
-    expect(out.per100g.calories).toBe(250);
+    expect(out.per100g.calories).toBe(40);
     expect(out.per100g.proteinG).toBe(10);
     // absent in the payload -> absent in the result (NOT 0)
     expect(out.per100g.fatG).toBeUndefined();

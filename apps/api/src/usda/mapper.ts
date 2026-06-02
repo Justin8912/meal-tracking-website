@@ -149,24 +149,27 @@ function buildPer100g(nutrients: ExtractedNutrient[]): NormalizedPer100g {
     }
   }
 
-  // Atwater derivation: when the USDA response omits calories (nutrient 208)
-  // but supplies macros, calculate from protein/carbs/fat using the standard
-  // Atwater factors (1g protein = 4 kcal, 1g carbs = 4 kcal, 1g fat = 9 kcal).
-  // This keeps the calories field non-null so the nutrition engine includes it
-  // in per-serving and weekly totals, and so it is persisted in the ingredients
-  // snapshot. Only apply when at least one macro is present; never fabricate a
-  // value of 0 from nothing.
+  // Always derive calories from macros using Atwater General Factors
+  // (1g protein = 4 kcal, 1g carbs = 4 kcal, 1g fat = 9 kcal).
+  //
+  // Reason: different USDA data types report energy under different nutrient
+  // numbers — Foundation Foods use nutrient 957 ("Energy, Atwater General
+  // Factors") or 958 ("Atwater Specific Factors") instead of the standard 208,
+  // so reading nutrient 208 alone misses them. Rather than mapping every energy
+  // nutrient variant, we simply derive calories consistently from the macros we
+  // already have. This matches what USDA's own General Factors method computes
+  // and gives a consistent calorie value regardless of food type.
+  // Only skip if all macros are absent (can't derive anything meaningful).
   if (
-    per100g.calories === undefined &&
-    (per100g.proteinG !== undefined ||
-      per100g.carbsG !== undefined ||
-      per100g.fatG !== undefined)
+    per100g.proteinG !== undefined ||
+    per100g.carbsG !== undefined ||
+    per100g.fatG !== undefined
   ) {
     const derived =
       (per100g.proteinG ?? 0) * 4 +
       (per100g.carbsG ?? 0) * 4 +
       (per100g.fatG ?? 0) * 9;
-    per100g.calories = Math.round(derived * 10) / 10; // one decimal, like other values
+    per100g.calories = Math.round(derived * 10) / 10;
   }
 
   return per100g;
