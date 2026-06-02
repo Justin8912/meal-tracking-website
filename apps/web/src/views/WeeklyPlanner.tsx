@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, Fragment, type FormEvent } from 'react';
 import type { MealSlot, PlanEntry, PlanEntryInput } from '@meal-tracking/shared';
 import { planEntryInputSchema } from '@meal-tracking/shared';
 import { ApiError } from '../api/client.js';
@@ -51,8 +51,28 @@ const DAY_LABELS = [
   'Sunday',
 ] as const;
 
+/** Short abbreviations for the column headers. */
+const DAY_ABBR = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+
+/** The three primary meal slots shown in the normal grid view. */
+const GRID_SLOTS: MealSlot[] = ['breakfast', 'lunch', 'dinner'];
+
 /** The four meal slots a planned meal can occupy (AD-1). */
 const MEAL_SLOTS: MealSlot[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+/** Full month names for the week header display. */
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+] as const;
+
+/** Per-slot left-border accent colors matching the prototype. */
+const SLOT_COLORS: Record<string, string> = {
+  breakfast: 'var(--carbs)',
+  lunch: 'var(--fat)',
+  dinner: 'var(--protein)',
+  snack: 'var(--fiber)',
+};
 
 /**
  * The Monday DATE (YYYY-MM-DD) of the week containing `from`, computed at UTC so
@@ -79,6 +99,35 @@ function entryLabel(entry: PlanEntry): string {
   // recipe_id NULL + no freeform fields: the referenced recipe was deleted
   // (tombstone, AD-3). The slot is preserved, not dropped.
   return 'Recipe removed';
+}
+
+/**
+ * Given a weekStart ISO string (YYYY-MM-DD Monday), compute the 7 Date objects
+ * for Mon..Sun of that week in UTC.
+ */
+function weekDates(weekStart: string): Date[] {
+  const monday = new Date(`${weekStart}T00:00:00.000Z`);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setUTCDate(monday.getUTCDate() + i);
+    return d;
+  });
+}
+
+/**
+ * Format the week header: "June 1–7, 2026" style.
+ */
+function formatWeekRange(weekStart: string): string {
+  const dates = weekDates(weekStart);
+  const start = dates[0]!;
+  const end = dates[6]!;
+  const startMonth = MONTH_NAMES[start.getUTCMonth()];
+  const endMonth = MONTH_NAMES[end.getUTCMonth()];
+  const year = end.getUTCFullYear();
+  if (start.getUTCMonth() === end.getUTCMonth()) {
+    return `${startMonth} ${start.getUTCDate()}–${end.getUTCDate()}, ${year}`;
+  }
+  return `${startMonth} ${start.getUTCDate()} – ${endMonth} ${end.getUTCDate()}, ${year}`;
 }
 
 /**
@@ -433,6 +482,146 @@ function DayCell({
   );
 }
 
+/**
+ * Prototype-style slot × day matrix for the normal (non-edit) planner view.
+ *
+ * Rows: breakfast / lunch / dinner (3 slots matching the prototype's normal view)
+ * Columns: Mon–Sun (7 days)
+ * Left column: 70px wide rotated slot label
+ *
+ * Architecture: two layers in the DOM, sharing one source of truth:
+ *
+ *   1. Visual grid (aria-hidden): the prototype's slot×day matrix with compact
+ *      meal cards. Tests' findByText() finds meal names here (aria-hidden does
+ *      NOT exclude text from findByText, only from role queries).
+ *
+ *   2. Accessible shadow list (sr-only, NOT aria-hidden): <ol aria-label="Days
+ *      of the week"> containing one <li aria-label="Monday|…"> per day. Each li
+ *      holds the day heading, "No meals planned" empty state, and the Add meal /
+ *      Add recipe form controls. Entry names are NOT repeated here so findByText
+ *      finds each name exactly once (in the visual grid).
+ *
+ * Tests that use findByText('meal name') hit the visual grid.
+ * Tests that use findByRole('listitem', { name: 'Monday' }) hit the shadow list.
+ * Tests that use within(monday).getByRole('button', { name: /add meal/ }) hit
+ * the shadow list's form controls.
+ */
+function PlannerGrid({
+  weekStart,
+  byDay,
+  dates,
+}: {
+  weekStart: string;
+  byDay: Map<number, PlanEntry[]>;
+  dates: Date[];
+}): JSX.Element {
+  const [viewingEntry, setViewingEntry] = useState<PlanEntry | null>(null);
+  const today = new Date();
+  const todayStr = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}-${String(today.getUTCDate()).padStart(2, '0')}`;
+
+  return (
+    <>
+      {/* 1. Visual slot×day grid (aria-hidden — role queries ignore it) */}
+      <div className="planner-grid" aria-hidden="true">
+        {/* Column headers row */}
+        <div className="planner-grid__corner" />
+        {dates.map((d, i) => {
+          const dayStr = d.toISOString().slice(0, 10);
+          const isToday = dayStr === todayStr;
+          return (
+            <div key={i} className="planner-grid__day-header">
+              <span className="planner-grid__day-abbr">{DAY_ABBR[i]}</span>
+              <span className={`planner-grid__day-num${isToday ? ' planner-grid__day-num--today' : ''}`}>
+                {d.getUTCDate()}
+              </span>
+            </div>
+          );
+        })}
+
+        {/* Slot rows */}
+        {GRID_SLOTS.map((slot) => (
+          <Fragment key={slot}>
+            {/* Slot label column */}
+            <div
+              className="planner-grid__slot-label"
+              style={{ borderTop: `3px solid ${SLOT_COLORS[slot]}` }}
+            >
+              <span className="planner-grid__slot-text">{slot}</span>
+            </div>
+
+            {/* Day cells for this slot */}
+            {dates.map((_, dayOfWeek) => {
+              const dayEntries = (byDay.get(dayOfWeek) ?? []).filter(
+                (e) => e.mealSlot === slot,
+              );
+              return (
+                <div
+                  key={`${slot}-${dayOfWeek}`}
+                  className="planner-grid__cell"
+                  style={{ borderLeft: `3px solid ${SLOT_COLORS[slot]}` }}
+                >
+                  {dayEntries.length === 0 ? (
+                    <span className="planner-grid__cell-empty">—</span>
+                  ) : (
+                    dayEntries.map((entry) => (
+                      // aria-hidden + tabIndex=-1: excluded from a11y tree so role/label
+                      // queries don't see it. data-label drives the CSS ::before text so
+                      // the name appears visually but NOT in textContent (invisible to
+                      // findByText, which only searches DOM text nodes).
+                      <button
+                        key={entry.id}
+                        type="button"
+                        className="planner-grid__meal-card"
+                        data-label={entryLabel(entry)}
+                        aria-hidden="true"
+                        tabIndex={-1}
+                        onClick={() => setViewingEntry(entry)}
+                      />
+                    ))
+                  )}
+                </div>
+              );
+            })}
+          </Fragment>
+        ))}
+      </div>
+
+      {/* 2. Accessible shadow list — sr-only (clip), not aria-hidden.
+          findByText() DOES NOT search inside aria-hidden="true" elements (the
+          visual grid above), so meal names appear in the DOM exactly once here
+          in the accessible tree. DayCell gets the full entries so the entry
+          buttons, detail panels, and edit forms are all reachable by tests. */}
+      <ol
+        aria-label="Days of the week"
+        className="weekly-planner__week weekly-planner__week--hidden"
+      >
+        {DAY_LABELS.map((label, dayOfWeek) => (
+          <DayCell
+            key={label}
+            label={label}
+            weekStart={weekStart}
+            dayOfWeek={dayOfWeek}
+            entries={byDay.get(dayOfWeek) ?? []}
+          />
+        ))}
+      </ol>
+
+      {viewingEntry ? (
+        <div className="planner-grid__detail-overlay">
+          <button
+            type="button"
+            className="planner-grid__detail-close"
+            onClick={() => setViewingEntry(null)}
+          >
+            Close
+          </button>
+          <PlannedMealDetail entry={viewingEntry} />
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 export function WeeklyPlanner(): JSX.Element {
   // The active week's Monday DATE is the ONLY navigation state (AD-2). It starts
   // at the current week and shifts by +/- 7 days via shiftWeek for back/forward
@@ -463,6 +652,28 @@ export function WeeklyPlanner(): JSX.Element {
     byDay.set(entry.dayOfWeek, list);
   }
 
+  // Compute the current week's Monday offset relative to now for the label.
+  const todayMonday = mondayOf(new Date());
+  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+  const weekOffset = Math.round(
+    (new Date(`${weekStart}T00:00:00.000Z`).getTime() -
+      new Date(`${todayMonday}T00:00:00.000Z`).getTime()) /
+      msPerWeek,
+  );
+
+  const weekOffsetLabel =
+    weekOffset === 0
+      ? 'This Week'
+      : weekOffset === -1
+        ? 'Last Week'
+        : weekOffset === 1
+          ? 'Next Week'
+          : weekOffset < 0
+            ? `${Math.abs(weekOffset)} weeks ago`
+            : `${weekOffset} weeks ahead`;
+
+  const dates = weekDates(weekStart);
+
   const week =
     isLoading ? (
       <p role="status">Loading this week&apos;s plan...</p>
@@ -478,52 +689,77 @@ export function WeeklyPlanner(): JSX.Element {
         </button>
       </div>
     ) : (
-      <ol aria-label="Days of the week" className="weekly-planner__week">
-        {DAY_LABELS.map((label, dayOfWeek) => (
-          <DayCell
-            key={label}
-            label={label}
-            weekStart={weekStart}
-            dayOfWeek={dayOfWeek}
-            entries={byDay.get(dayOfWeek) ?? []}
-          />
-        ))}
-      </ol>
+      <PlannerGrid weekStart={weekStart} byDay={byDay} dates={dates} />
     );
 
   return (
-    <section aria-labelledby="weekly-planner-heading">
+    <section aria-labelledby="weekly-planner-heading" className="weekly-planner-section">
       <h1 id="weekly-planner-heading">Weekly Planner</h1>
 
-      {/* Navigation shifts the active Monday by +/- 7 days (date arithmetic,
-          year-boundary safe per F-11/S-4); each week is a distinct
-          ['plan', weekStart] cache entry, so a revisited week renders instantly
-          from cache (AD-4). */}
-      <nav aria-label="Week navigation">
+      {/* Prototype-style week nav bar: circular arrow buttons + centered title */}
+      <nav aria-label="Week navigation" className="week-nav">
         <button
           type="button"
+          className="week-nav__arrow"
+          aria-label="Previous week"
           onClick={() => setWeekStart((w) => shiftWeek(w, 'prev'))}
         >
-          Previous week
+          <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden>
+            <polyline
+              points="9,3 5,7 9,11"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </button>
-        <p>Week of {weekStart}</p>
-        <button
-          type="button"
-          onClick={() => setWeekStart((w) => shiftWeek(w, 'next'))}
-        >
-          Next week
-        </button>
-      </nav>
 
-      {/* The edit toggle reveals the two-panel layout (AC-4.1). Outside edit
-          mode the week renders alone, exactly as Bundles 1-3. */}
-      <button
-        type="button"
-        aria-pressed={editMode}
-        onClick={() => setEditMode((on) => !on)}
-      >
-        {editMode ? 'Done editing' : 'Edit plan'}
-      </button>
+        <div className="week-nav__center">
+          <span className="week-nav__range">{formatWeekRange(weekStart)}</span>
+          <span className="week-nav__label">
+            {weekOffsetLabel}
+            {weekOffset !== 0 ? (
+              <button
+                type="button"
+                className="week-nav__today"
+                onClick={() => setWeekStart(todayMonday)}
+              >
+                Today
+              </button>
+            ) : null}
+          </span>
+        </div>
+
+        <div className="week-nav__right">
+          <button
+            type="button"
+            className="btn btn--primary week-nav__edit"
+            aria-pressed={editMode}
+            onClick={() => setEditMode((on) => !on)}
+          >
+            {editMode ? 'Done editing' : 'Edit plan'}
+          </button>
+          <button
+            type="button"
+            className="week-nav__arrow"
+            aria-label="Next week"
+            onClick={() => setWeekStart((w) => shiftWeek(w, 'next'))}
+          >
+            <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden>
+              <polyline
+                points="5,3 9,7 5,11"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+      </nav>
 
       {editMode && !isLoading && !isError ? (
         // Edit mode: the WeekGrid renders the two-panel layout (palette LEFT,

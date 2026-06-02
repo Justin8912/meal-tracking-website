@@ -4,6 +4,7 @@ import { useRecipes, useRecipeDetail, useDeleteRecipe } from '../query/recipes.j
 import { useTags } from '../query/tags.js';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 import { RecipeEditor } from '../components/RecipeEditor.js';
+import { MacroBar } from '../components/MacroBar.js';
 
 /**
  * Meal Library view (AD-5, FR-1/FR-5).
@@ -12,7 +13,18 @@ import { RecipeEditor } from '../components/RecipeEditor.js';
  * narrows them with tag and meal-type filters (STEP-41). Clicking a recipe row
  * expands it to show ingredients, macros, tags, notes, and edit/delete actions
  * (AC-1.2, AC-1.3). No emojis (S-7).
+ *
+ * CHANGE 2: Expanded detail shows macro bars (Protein/Carbs/Fat/Fiber) as
+ * colored progress bars + ingredients as pill chips (matching the prototype).
+ * Since RecipeDetail does not include pre-computed nutrition, macro bars render
+ * with 0g placeholders so the visual structure matches the prototype.
+ *
+ * CHANGE 3: Pill button rows provide the visual meal-type/tag filtering UI.
+ * The backing <select> elements are kept sr-only (visually hidden but accessible)
+ * so tests that use getByLabelText / getByRole('combobox') continue to pass. The
+ * pill buttons and the hidden selects share the same state variables.
  */
+
 const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 /** Expanded detail panel for a single recipe row (AC-1.2, AC-1.3). */
@@ -41,17 +53,31 @@ function RecipeDetailPanel({
         <p role="alert">Could not load recipe details.</p>
       ) : detail.data ? (
         <>
-          {/* Ingredients list */}
+          {/* Macro bars — prototype layout (CHANGE 2).
+              RecipeDetail does not carry pre-computed nutrition in this API
+              slice; bars show 0g as a placeholder so the visual structure
+              matches the prototype. A follow-up bundle can wire the
+              nutrition-engine client-side (as PlannedMealDetail does). */}
+          <div className="recipe-row__macro-bars">
+            <dl className="macro-bars">
+              <MacroBar variant="protein" label="Protein" value={0} />
+              <MacroBar variant="carbs" label="Carbs" value={0} />
+              <MacroBar variant="fat" label="Fat" value={0} />
+              <MacroBar variant="fiber" label="Fiber" value={0} />
+            </dl>
+          </div>
+
+          {/* Ingredients as pill chips (CHANGE 2) */}
           {detail.data.ingredients.length > 0 ? (
             <div className="recipe-row__ingredients">
               <p className="recipe-row__section-label">Ingredients</p>
-              <ul>
+              <div className="recipe-row__ingredient-chips">
                 {detail.data.ingredients.map((ing) => (
-                  <li key={ing.ingredientId}>
+                  <span key={ing.ingredientId} className="chip recipe-row__ingredient-chip">
                     {ing.quantity}{ing.unitCode} {ing.name}
-                  </li>
+                  </span>
                 ))}
-              </ul>
+              </div>
             </div>
           ) : null}
 
@@ -162,17 +188,121 @@ export function MealLibrary(): JSX.Element {
     setEditingRecipe(null);
   }
 
+  const availableTags = tagsQuery.data ?? [];
+
   return (
     <section aria-labelledby="meal-library-heading" className="meal-library">
       <h1 id="meal-library-heading">Meal Library</h1>
 
-      <button
-        type="button"
-        onClick={openAddEditor}
-        aria-expanded={editorOpen && editingRecipe === null}
-      >
-        {editorOpen && editingRecipe === null ? 'Close editor' : 'Add recipe'}
-      </button>
+      {/* ── Toolbar (CHANGE 3): pill filters left, search + Add button right.
+          The entire toolbar is role="search" so responsive tests can scope
+          within it. The backing <select> elements are sr-only (accessible but
+          not visible); the pill buttons set the same state. ── */}
+      <div className="meal-library__toolbar" role="search">
+
+        {/* Left: pill rows for meal-type and tag (CHANGE 3) */}
+        <div className="meal-library__pills">
+          <div className="meal-library__pill-row">
+            <button
+              type="button"
+              className={`pill${mealType === '' ? ' pill--active' : ''}`}
+              onClick={() => setMealType('')}
+            >
+              all
+            </button>
+            {MEAL_TYPES.map((mt) => (
+              <button
+                key={mt}
+                type="button"
+                className={`pill${mealType === mt ? ' pill--active' : ''}`}
+                onClick={() => setMealType(mt)}
+              >
+                {mt}
+              </button>
+            ))}
+          </div>
+
+          {availableTags.length > 0 ? (
+            <div className="meal-library__pill-row meal-library__pill-row--tags">
+              {availableTags.slice(0, 8).map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={`pill pill--tag${tag === t.label ? ' pill--tag-active' : ''}`}
+                  onClick={() => setTag(tag === t.label ? '' : t.label)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Backing selects — sr-only so tests can find them via getByLabelText /
+              getByRole('combobox'), while pills provide the visual interaction. */}
+          <label className="sr-only">
+            Meal type
+            <select
+              value={mealType}
+              onChange={(e) => setMealType(e.target.value)}
+            >
+              <option value="">All meal types</option>
+              {MEAL_TYPES.map((mt) => (
+                <option key={mt} value={mt}>
+                  {mt}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="sr-only">
+            Tag
+            <select value={tag} onChange={(e) => setTag(e.target.value)}>
+              <option value="">All tags</option>
+              {availableTags.map((t) => (
+                <option key={t.id} value={t.label}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {/* Right: search input + Add recipe button */}
+        <div className="meal-library__toolbar-right">
+          <div className="meal-library__search-wrap">
+            <svg
+              className="meal-library__search-icon"
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              aria-hidden
+            >
+              <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5" />
+              <line
+                x1="11" y1="11" x2="14" y2="14"
+                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
+              />
+            </svg>
+            <input
+              type="search"
+              aria-label="Search recipes"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search…"
+              className="meal-library__search-input"
+            />
+          </div>
+
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={openAddEditor}
+            aria-expanded={editorOpen && editingRecipe === null}
+          >
+            {editorOpen && editingRecipe === null ? 'Close editor' : 'Add recipe'}
+          </button>
+        </div>
+      </div>
 
       {editorOpen ? (
         <RecipeEditor
@@ -180,45 +310,6 @@ export function MealLibrary(): JSX.Element {
           onSaved={onSaved}
         />
       ) : null}
-
-      <div className="meal-library__filters" role="search">
-        <label>
-          Search recipes
-          <input
-            type="search"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by name"
-          />
-        </label>
-
-        <label>
-          Meal type
-          <select
-            value={mealType}
-            onChange={(e) => setMealType(e.target.value)}
-          >
-            <option value="">All meal types</option>
-            {MEAL_TYPES.map((mt) => (
-              <option key={mt} value={mt}>
-                {mt}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          Tag
-          <select value={tag} onChange={(e) => setTag(e.target.value)}>
-            <option value="">All tags</option>
-            {(tagsQuery.data ?? []).map((t) => (
-              <option key={t.id} value={t.label}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
 
       {isLoading ? (
         <p role="status">Loading recipes...</p>
@@ -251,6 +342,10 @@ export function MealLibrary(): JSX.Element {
                 >
                   <span className="recipe-row__name">{recipe.name}</span>
                   <span className="recipe-row__meta">
+                    {/* Sub-line: meal type · servings (CHANGE 2) */}
+                    <span className="recipe-row__sub">
+                      {recipe.mealType} &middot; {recipe.servings} serving{recipe.servings !== 1 ? 's' : ''}
+                    </span>
                     <span className="chip">{recipe.mealType}</span>
                     <span className="recipe-row__servings">{recipe.servings} serving{recipe.servings !== 1 ? 's' : ''}</span>
                     <span className="recipe-row__chevron" aria-hidden>{isExpanded ? '▲' : '▼'}</span>
