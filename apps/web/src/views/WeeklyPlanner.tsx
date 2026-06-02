@@ -55,7 +55,7 @@ const DAY_LABELS = [
 const DAY_ABBR = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
 /** The three primary meal slots shown in the normal grid view. */
-const GRID_SLOTS: MealSlot[] = ['breakfast', 'lunch', 'dinner'];
+const GRID_SLOTS: MealSlot[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 /** The four meal slots a planned meal can occupy (AD-1). */
 const MEAL_SLOTS: MealSlot[] = ['breakfast', 'lunch', 'dinner', 'snack'];

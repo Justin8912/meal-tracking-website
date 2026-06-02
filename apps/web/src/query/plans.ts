@@ -178,11 +178,12 @@ export function useSavePlanEntry(): UseMutationResult<
     mutationFn: ({ input, planEntryId }: SavePlanEntryArgs) =>
       savePlanEntry(input, planEntryId),
     onSuccess: () => {
-      // Invalidate the week's plan AND its nutrition summary so the macro totals
-      // recompute after a meal is added/edited (FR-5). The two keys do not share
-      // a prefix, so both are invalidated explicitly.
+      // Invalidate the week's plan AND both nutrition summary queries so the
+      // macro totals recompute after a meal is added/edited (FR-5). All three
+      // keys use different prefixes so each is invalidated explicitly.
       void queryClient.invalidateQueries({ queryKey: ['plan'] });
       void queryClient.invalidateQueries({ queryKey: ['plan-summary'] });
+      void queryClient.invalidateQueries({ queryKey: ['plan-daily-summary'] });
     },
   });
 }
@@ -204,6 +205,7 @@ export function useDeletePlanEntry(): UseMutationResult<void, Error, string> {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['plan'] });
       void queryClient.invalidateQueries({ queryKey: ['plan-summary'] });
+      void queryClient.invalidateQueries({ queryKey: ['plan-daily-summary'] });
     },
   });
 }
