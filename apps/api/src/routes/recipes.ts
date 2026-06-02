@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { and, asc, eq, ilike, inArray } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   recipeInputSchema,
@@ -225,7 +225,13 @@ export function registerRecipesRoutes(app: FastifyInstance, db: Db): void {
 
     // All conditions are parameterized Drizzle expressions (S-4) combined with
     // AND; empty/whitespace params are ignored (AD-6).
-    const conditions = [eq(recipes.workspaceId, workspaceId)];
+    // isNull(recipes.deletedAt): the list only shows live recipes; soft-deleted
+    // recipes are excluded here but remain resolvable via GET /recipes/:id so
+    // the planner can still show name + nutrition for historical plan entries.
+    const conditions = [
+      eq(recipes.workspaceId, workspaceId),
+      isNull(recipes.deletedAt),
+    ];
 
     if (mealType) {
       conditions.push(eq(recipes.mealType, mealType));
@@ -345,26 +351,30 @@ export function registerRecipesRoutes(app: FastifyInstance, db: Db): void {
     '/recipes/:id',
     async (request, reply) => {
       const workspaceId = await resolveWorkspaceId(db);
-      let deletedId: string | undefined;
+      // Soft delete: stamp deleted_at rather than removing the row. This keeps
+      // plan_entries.recipe_id intact so the weekly planner can still resolve
+      // the recipe name and compute nutrition for historical weeks. The recipe
+      // disappears from GET /recipes (which filters deleted_at IS NULL) but
+      // remains resolvable via GET /recipes/:id for plan detail / nutrition.
+      let updatedId: string | undefined;
       try {
-        // recipe_ingredients and recipe_tags cascade on delete (0002). Any
-        // weekly-plan references are left as tombstones via ON DELETE SET NULL
-        // owned by the platform schema.
-        const deleted = await db
-          .delete(recipes)
+        const updated = await db
+          .update(recipes)
+          .set({ deletedAt: new Date() })
           .where(
             and(
               eq(recipes.id, request.params.id),
               eq(recipes.workspaceId, workspaceId),
+              isNull(recipes.deletedAt), // idempotent: already-deleted → 404
             ),
           )
           .returning({ id: recipes.id });
-        deletedId = deleted[0]?.id;
+        updatedId = updated[0]?.id;
       } catch (err) {
         throw new PersistenceError('Failed to delete recipe', { cause: err });
       }
 
-      if (!deletedId) {
+      if (!updatedId) {
         return reply.code(404).send({
           error: { code: 'NOT_FOUND', message: 'Recipe not found' },
         });

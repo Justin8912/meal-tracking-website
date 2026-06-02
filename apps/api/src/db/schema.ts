@@ -112,6 +112,10 @@ export const recipes = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
+    // Soft delete: NULL = live; a timestamp = deleted at that time.
+    // Physical deletes are avoided so plan_entries.recipe_id stays intact and
+    // the weekly planner can still resolve name + nutrition for historical weeks.
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (table) => [
     index('idx_recipes_workspace_id').on(table.workspaceId),
