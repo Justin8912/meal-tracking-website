@@ -101,14 +101,55 @@ function RecipeDetailPanel({
   const deleteRecipe = useDeleteRecipe();
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // Compute nutrition client-side via the shared engine — same pattern as
-  // PlannedMealDetail so the library and planner always agree on values.
-  const nutrition = useMemo(() => {
-    if (!detail.data || !ingredientsQuery.data) return null;
+  // Compute per-serving totals and per-ingredient contributions via the engine.
+  const { nutrition, ingredientRows } = useMemo(() => {
+    if (!detail.data || !ingredientsQuery.data) {
+      return { nutrition: null, ingredientRows: [] };
+    }
     const byId = new Map(ingredientsQuery.data.map((i) => [i.id, i]));
     const lines = buildEngineLines(detail.data, byId);
-    const result = computeRecipeNutrition(lines, recipe.servings);
-    return formatNutrition(result.perServing);
+
+    // Aggregate totals (per serving)
+    const totals = formatNutrition(
+      computeRecipeNutrition(lines, recipe.servings).perServing,
+    );
+
+    // Per-ingredient contribution to the whole recipe (servings=1 = raw total,
+    // not divided — so each row reflects exactly what that ingredient adds).
+    const rows = detail.data.ingredients.map((usage) => {
+      const ing = byId.get(usage.ingredientId);
+      if (!ing) {
+        return {
+          ingredientId: usage.ingredientId,
+          name: usage.name,
+          quantity: usage.quantity,
+          unitCode: usage.unitCode,
+          nutrition: null as ReturnType<typeof formatNutrition> | null,
+        };
+      }
+      const line: NutritionLine = {
+        quantity: usage.quantity,
+        unitCode: usage.unitCode,
+        ingredient: {
+          id: ing.id,
+          referenceGrams: ing.referenceGrams,
+          gramEquivalents: ing.unitGramEquivalents,
+          gramWeightPerQty: ing.gramWeightPerQty,
+          nutrition: toEngineNutrition(ing.nutrition),
+          absentMacros: absentMacrosOf(ing.nutrition),
+        },
+      };
+      const result = computeRecipeNutrition([line], 1);
+      return {
+        ingredientId: usage.ingredientId,
+        name: usage.name,
+        quantity: usage.quantity,
+        unitCode: usage.unitCode,
+        nutrition: formatNutrition(result.total),
+      };
+    });
+
+    return { nutrition: totals, ingredientRows: rows };
   }, [detail.data, ingredientsQuery.data, recipe.servings]);
 
   function handleEdit(): void {
@@ -146,17 +187,56 @@ function RecipeDetailPanel({
             ) : null}
           </div>
 
-          {/* Ingredients as pill chips (CHANGE 2) */}
-          {detail.data.ingredients.length > 0 ? (
-            <div className="recipe-row__ingredients">
-              <p className="recipe-row__section-label">Ingredients</p>
-              <div className="recipe-row__ingredient-chips">
-                {detail.data.ingredients.map((ing) => (
-                  <span key={ing.ingredientId} className="chip recipe-row__ingredient-chip">
-                    {ing.quantity}{ing.unitCode} {ing.name}
-                  </span>
-                ))}
-              </div>
+          {/* Ingredient nutrition table: each row shows the ingredient's
+              individual contribution to the recipe's macros. */}
+          {ingredientRows.length > 0 ? (
+            <div className="recipe-row__ingredient-table-wrap">
+              <table className="recipe-row__ingredient-table">
+                <thead>
+                  <tr>
+                    <th>Ingredient</th>
+                    <th>Amount</th>
+                    <th>Protein</th>
+                    <th>Carbs</th>
+                    <th>Fat</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ingredientRows.map((row) => (
+                    <tr key={row.ingredientId}>
+                      <td>{row.name}</td>
+                      <td className="recipe-row__td-num">
+                        {row.quantity}{row.unitCode}
+                      </td>
+                      <td className="recipe-row__td-num recipe-row__td-protein">
+                        {row.nutrition ? `${row.nutrition.proteinG}g` : '–'}
+                      </td>
+                      <td className="recipe-row__td-num recipe-row__td-carbs">
+                        {row.nutrition ? `${row.nutrition.carbsG}g` : '–'}
+                      </td>
+                      <td className="recipe-row__td-num recipe-row__td-fat">
+                        {row.nutrition ? `${row.nutrition.fatG}g` : '–'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                {ingredientRows.length > 1 && nutrition ? (
+                  <tfoot>
+                    <tr className="recipe-row__tfoot-total">
+                      <td colSpan={2}>Total per serving</td>
+                      <td className="recipe-row__td-num recipe-row__td-protein">
+                        {nutrition.proteinG}g
+                      </td>
+                      <td className="recipe-row__td-num recipe-row__td-carbs">
+                        {nutrition.carbsG}g
+                      </td>
+                      <td className="recipe-row__td-num recipe-row__td-fat">
+                        {nutrition.fatG}g
+                      </td>
+                    </tr>
+                  </tfoot>
+                ) : null}
+              </table>
             </div>
           ) : null}
 
