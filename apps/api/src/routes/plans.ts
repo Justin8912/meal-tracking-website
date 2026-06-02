@@ -464,6 +464,128 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
     return reply.code(200).send(body);
   });
 
+  // GET /plans/daily-summary?weekStart= — per-day macro breakdown.
+  // Same engine computation as /plans/summary but grouped by day_of_week (0-6).
+  app.get('/plans/daily-summary', async (request, reply) => {
+    const parsedQuery = planQuerySchema.safeParse(request.query);
+    if (!parsedQuery.success) {
+      return reply.code(400).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message:
+            parsedQuery.error.issues[0]?.message ?? 'Invalid query parameters',
+        },
+      });
+    }
+
+    const workspaceId = await resolveWorkspaceId(db);
+    const weekStartDate = normalizeToMonday(parsedQuery.data.weekStart);
+
+    // Fetch all entries for the week (same shape as the summary query).
+    const entries = await db
+      .select({
+        id: planEntries.id,
+        dayOfWeek: planEntries.dayOfWeek,
+        recipeId: planEntries.recipeId,
+        freeformTitle: planEntries.freeformTitle,
+      })
+      .from(planEntries)
+      .where(
+        and(
+          eq(planEntries.workspaceId, workspaceId),
+          eq(planEntries.weekStartDate, weekStartDate),
+        ),
+      )
+      .orderBy(asc(planEntries.dayOfWeek), asc(planEntries.position));
+
+    // Collect unique recipe ids.
+    const recipeIdSet = new Set<string>();
+    for (const e of entries) {
+      if (e.recipeId) recipeIdSet.add(e.recipeId);
+    }
+    const recipeIds = [...recipeIdSet];
+
+    // Load per-serving nutrition for every referenced recipe (same as weekly summary).
+    const perServingByRecipe = new Map<string, Nutrition>();
+    if (recipeIds.length > 0) {
+      const recipeRows = await db
+        .select({ id: recipes.id, servings: recipes.servings })
+        .from(recipes)
+        .where(and(eq(recipes.workspaceId, workspaceId), inArray(recipes.id, recipeIds)));
+      const servingsByRecipe = new Map(recipeRows.map((r) => [r.id, r.servings]));
+
+      const usageRows = await db
+        .select({
+          recipeId: recipeIngredients.recipeId,
+          quantity: recipeIngredients.quantity,
+          unitCode: recipeIngredients.unitCode,
+          ingredient: ingredients,
+        })
+        .from(recipeIngredients)
+        .innerJoin(ingredients, eq(recipeIngredients.ingredientId, ingredients.id))
+        .where(inArray(recipeIngredients.recipeId, recipeIds))
+        .orderBy(asc(recipeIngredients.position));
+
+      const linesByRecipe = new Map<string, NutritionLine[]>();
+      for (const row of usageRows) {
+        const list = linesByRecipe.get(row.recipeId) ?? [];
+        list.push({
+          quantity: Number(row.quantity),
+          unitCode: row.unitCode,
+          ingredient: {
+            id: row.ingredient.id,
+            referenceGrams: Number(row.ingredient.referenceGrams),
+            gramEquivalents: row.ingredient.unitGramEquivalents,
+            gramWeightPerQty: row.ingredient.gramWeightPerQty === null ? null : Number(row.ingredient.gramWeightPerQty),
+            nutrition: toEngineNutrition(row.ingredient),
+            absentMacros: absentMacrosOf(row.ingredient),
+          },
+        });
+        linesByRecipe.set(row.recipeId, list);
+      }
+
+      for (const rid of recipeIds) {
+        const lines = linesByRecipe.get(rid) ?? [];
+        const servings = servingsByRecipe.get(rid) ?? 1;
+        perServingByRecipe.set(rid, computeRecipeNutrition(lines, servings).perServing);
+      }
+    }
+
+    // Accumulate per-day totals (unrounded), then round once at the boundary.
+    const dayTotals: Array<Nutrition & { dayOfWeek: number; hasData: boolean }> = [];
+    for (let d = 0; d < 7; d++) {
+      dayTotals.push({ ...emptyMacroTotal(), micronutrients: {}, dayOfWeek: d, hasData: false });
+    }
+    for (const entry of entries) {
+      if (!entry.recipeId) continue;
+      const perServing = perServingByRecipe.get(entry.recipeId);
+      if (!perServing) continue;
+      const day = dayTotals[entry.dayOfWeek];
+      if (!day) continue;
+      day.calories += perServing.calories;
+      day.proteinG += perServing.proteinG;
+      day.carbsG += perServing.carbsG;
+      day.fatG += perServing.fatG;
+      day.fiberG += perServing.fiberG;
+      day.hasData = true;
+    }
+
+    const result = dayTotals.map((day) => {
+      const rounded = formatNutrition(day);
+      return {
+        dayOfWeek: day.dayOfWeek,
+        hasData: day.hasData,
+        calories: rounded.calories,
+        proteinG: rounded.proteinG,
+        carbsG: rounded.carbsG,
+        fatG: rounded.fatG,
+        fiberG: rounded.fiberG,
+      };
+    });
+
+    return reply.code(200).send(result);
+  });
+
   app.get('/plans', async (request, reply) => {
     const parsedQuery = planQuerySchema.safeParse(request.query);
     if (!parsedQuery.success) {

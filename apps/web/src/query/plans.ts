@@ -112,6 +112,32 @@ export function useWeeklySummary(
   });
 }
 
+/** Per-day macro totals returned by GET /plans/daily-summary. */
+export interface DayNutrition {
+  dayOfWeek: number; // 0 = Monday, 6 = Sunday
+  hasData: boolean;
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  fiberG: number;
+}
+
+async function fetchDailyNutrition(weekStart: string): Promise<DayNutrition[]> {
+  const params = new URLSearchParams({ weekStart });
+  return apiFetch<DayNutrition[]>(`/api/v1/plans/daily-summary?${params.toString()}`);
+}
+
+/** Query hook for per-day macro breakdown (GET /plans/daily-summary). */
+export function useDailyNutrition(
+  weekStart: string,
+): UseQueryResult<DayNutrition[], Error> {
+  return useQuery({
+    queryKey: ['plan-daily-summary', weekStart] as const,
+    queryFn: () => fetchDailyNutrition(weekStart),
+  });
+}
+
 /**
  * Persist a plan entry. A `planEntryId` routes to PUT /plans/:id (edit),
  * otherwise POST /plans (add). The body is the shared PlanEntryInput contract

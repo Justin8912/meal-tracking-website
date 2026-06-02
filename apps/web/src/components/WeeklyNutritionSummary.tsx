@@ -1,129 +1,196 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import type { PlanEntry } from '@meal-tracking/shared';
-import { useWeeklySummary } from '../query/plans.js';
-import { MacroBar } from './MacroBar.js';
+import { useWeeklySummary, useDailyNutrition, type DayNutrition } from '../query/plans.js';
 
 /**
- * Weekly nutrition summary (STEP-22, FR-5, AC-5.1/AC-5.2; AD-6).
+ * Weekly nutrition summary — tabbed daily view.
  *
- * Renders the week's aggregated MACRO totals (calories/protein/carbs/fat/fiber)
- * and an explicit statement of which meals are NOT counted. The aggregation is
- * done SERVER-SIDE by GET /plans/summary via the shared nutrition-engine on
- * UNROUNDED per-serving values, rounded once at the server boundary (F-20, S-5);
- * this component renders those totals AS-IS and never re-rounds. Micronutrients/
- * %DV are not aggregated at the weekly level (AC-5.1), so none are shown.
+ * Layout:
+ *   1. Average per day bar (from weekly total ÷ days with data)
+ *   2. Day tabs (Mon–Sun) — select a day to see that day's planned meals
+ *      and their per-meal calorie/macro breakdown from the server.
  *
- * Freeform meals and recipe tombstones carry no nutrition; the server returns
- * their plan-entry ids in `excludedEntryIds`. This component maps those ids back
- * to the week's plan entries (passed in by the planner) to name each excluded
- * meal, so the user sees exactly what was left out rather than the meals being
- * silently dropped or zero-counted (AC-5.2).
- *
+ * Server computes nutrition via the shared engine on unrounded per-serving
+ * values; this component renders those totals as-is and never re-rounds.
  * No emojis (S-7).
  */
 
+const DAY_LABELS = [
+  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+] as const;
+
+const DAY_ABBR = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+
 export interface WeeklyNutritionSummaryProps {
-  /** The active week's Monday DATE (AD-2); keys the summary query. */
   weekStart: string;
-  /** The week's plan entries, used to name the excluded meals (AC-5.2). */
   entries: PlanEntry[];
 }
 
-/** Human label for an excluded entry: its freeform title or a removed-recipe note. */
-function excludedLabel(entry: PlanEntry): string {
-  if (entry.freeformTitle) {
-    return entry.freeformTitle;
-  }
-  // recipe_id NULL + no freeform fields: the referenced recipe was deleted
-  // (tombstone, AD-3). It is surfaced, not dropped.
-  return 'Recipe removed';
+function entryLabel(entry: PlanEntry): string {
+  return entry.freeformTitle ?? entry.recipeName ?? 'Recipe removed';
+}
+
+function isExcluded(entry: PlanEntry): boolean {
+  // freeform meals and tombstones have no recipe nutrition
+  return entry.freeformTitle != null || (!entry.recipeId && !entry.freeformTitle);
+}
+
+/** A single pill showing a macro value. */
+function MacroPill({
+  value,
+  unit,
+  className,
+}: {
+  value: number;
+  unit: string;
+  className: string;
+}): JSX.Element {
+  return (
+    <span className={`nutrition-pill ${className}`}>
+      {value} {unit}
+    </span>
+  );
 }
 
 export function WeeklyNutritionSummary({
   weekStart,
   entries,
 }: WeeklyNutritionSummaryProps): JSX.Element {
-  const summaryQuery = useWeeklySummary(weekStart);
-  const summary = summaryQuery.data;
+  const [activeDay, setActiveDay] = useState<number>(0);
 
-  // Map the excluded plan-entry ids to the week's entries so each not-counted
-  // meal can be named. Entries not present in the passed list are skipped.
-  const excludedEntries = useMemo(() => {
-    const excludedIds = summary?.excludedEntryIds;
-    if (!excludedIds) {
-      return [];
+  const summaryQuery = useWeeklySummary(weekStart);
+  const dailyQuery = useDailyNutrition(weekStart);
+
+  // Group entries by day for the tab panel
+  const byDay = useMemo(() => {
+    const map = new Map<number, PlanEntry[]>();
+    for (const e of entries) {
+      const list = map.get(e.dayOfWeek) ?? [];
+      list.push(e);
+      map.set(e.dayOfWeek, list);
     }
-    const byId = new Map(entries.map((e) => [e.id, e]));
-    return excludedIds
-      .map((id) => byId.get(id))
-      .filter((e): e is PlanEntry => e !== undefined);
-  }, [summary, entries]);
+    return map;
+  }, [entries]);
+
+  // Average per day from the weekly server total
+  const avgPerDay = useMemo(() => {
+    const totals = summaryQuery.data?.totals;
+    if (!totals) return null;
+    const daily = Array.isArray(dailyQuery.data) ? dailyQuery.data : [];
+    const daysWithData = daily.filter((d) => d.hasData).length || 1;
+    const div = (n: number) => Math.round((n / daysWithData) * 10) / 10;
+    return {
+      calories: div(totals.calories),
+      proteinG: div(totals.proteinG),
+      carbsG: div(totals.carbsG),
+      fatG: div(totals.fatG),
+      fiberG: div(totals.fiberG),
+    };
+  }, [summaryQuery.data, dailyQuery.data]);
+
+  // The active day's server-computed totals
+  const activeDayData: DayNutrition | undefined = dailyQuery.data?.[activeDay];
+  const activeDayEntries = byDay.get(activeDay) ?? [];
+  const activeDayIncluded = activeDayEntries.filter((e) => !isExcluded(e));
+  const activeDayExcluded = activeDayEntries.filter(isExcluded);
+
+  const isLoading = summaryQuery.isLoading || dailyQuery.isLoading;
 
   return (
-    <section
-      aria-label="Weekly nutrition summary"
-      className="weekly-nutrition-summary"
-    >
+    <section aria-label="Weekly nutrition summary" className="weekly-nutrition-summary">
       <h2>Weekly nutrition</h2>
 
-      {summaryQuery.isLoading ? (
-        <p role="status">Computing weekly nutrition...</p>
-      ) : summaryQuery.isError || !summary?.totals ? (
-        <p role="alert">
-          Could not load the weekly nutrition summary:{' '}
-          {summaryQuery.error?.message ?? 'unknown error'}
-        </p>
+      {isLoading ? (
+        <p role="status">Computing nutrition...</p>
       ) : (
         <>
-          {/* Macros only - no vitamins/minerals at the weekly level (AC-5.1). */}
-          <dl className="macro-bars">
-            <MacroBar
-              variant="calories"
-              label="Calories"
-              value={summary.totals.calories}
-              valueAriaLabel="Total calories"
-            />
-            <MacroBar
-              variant="protein"
-              label="Protein (g)"
-              value={summary.totals.proteinG}
-              valueAriaLabel="Total protein"
-            />
-            <MacroBar
-              variant="carbs"
-              label="Carbs (g)"
-              value={summary.totals.carbsG}
-              valueAriaLabel="Total carbs"
-            />
-            <MacroBar
-              variant="fat"
-              label="Fat (g)"
-              value={summary.totals.fatG}
-              valueAriaLabel="Total fat"
-            />
-            <MacroBar
-              variant="fiber"
-              label="Fiber (g)"
-              value={summary.totals.fiberG}
-              valueAriaLabel="Total fiber"
-            />
-          </dl>
-
-          {/* State exactly which meals are not counted (AC-5.2). Only shown when
-              something is excluded; an all-recipe week has no note. */}
-          {excludedEntries.length > 0 ? (
-            <p role="note" className="weekly-nutrition-summary__excluded">
-              These meals are not counted in the totals (no nutrition data):{' '}
-              <span>
-                {excludedEntries.map((e, i) => (
-                  <span key={e.id}>
-                    {i > 0 ? ', ' : ''}
-                    {excludedLabel(e)}
-                  </span>
-                ))}
-              </span>
-            </p>
+          {/* ── Average per day ─────────────────────────────────────────── */}
+          {avgPerDay ? (
+            <div className="weekly-nutrition-summary__avg">
+              <p className="weekly-nutrition-summary__avg-label">
+                Daily average
+                <span className="weekly-nutrition-summary__avg-sub">
+                  across days with meals
+                </span>
+              </p>
+              <div className="weekly-nutrition-summary__avg-pills">
+                <MacroPill value={avgPerDay.calories} unit="kcal" className="nutrition-pill--cal" />
+                <MacroPill value={avgPerDay.proteinG} unit="g protein" className="nutrition-pill--protein" />
+                <MacroPill value={avgPerDay.carbsG} unit="g carbs" className="nutrition-pill--carbs" />
+                <MacroPill value={avgPerDay.fatG} unit="g fat" className="nutrition-pill--fat" />
+                <MacroPill value={avgPerDay.fiberG} unit="g fiber" className="nutrition-pill--fiber" />
+              </div>
+            </div>
           ) : null}
+
+          {/* ── Day tabs ────────────────────────────────────────────────── */}
+          <div className="day-nutrition">
+            <div className="day-nutrition__tabs" role="tablist" aria-label="Select day">
+              {DAY_ABBR.map((abbr, i) => {
+                const hasEntries = (byDay.get(i) ?? []).length > 0;
+                const isActive = activeDay === i;
+                return (
+                  <button
+                    key={abbr}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    className={[
+                      'day-nutrition__tab',
+                      isActive ? 'day-nutrition__tab--active' : '',
+                      hasEntries ? 'day-nutrition__tab--has-data' : '',
+                    ].filter(Boolean).join(' ')}
+                    onClick={() => setActiveDay(i)}
+                  >
+                    {abbr}
+                    {hasEntries ? <span className="day-nutrition__tab-dot" aria-hidden /> : null}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Tab panel */}
+            <div
+              role="tabpanel"
+              aria-label={DAY_LABELS[activeDay]}
+              className="day-nutrition__panel"
+            >
+              <h3 className="day-nutrition__day-title">{DAY_LABELS[activeDay]}</h3>
+
+              {activeDayEntries.length === 0 ? (
+                <p className="day-nutrition__empty">No meals planned.</p>
+              ) : (
+                <>
+                  {/* Day total bar (from server) */}
+                  {activeDayData?.hasData ? (
+                    <div className="day-nutrition__totals">
+                      <MacroPill value={activeDayData.calories} unit="kcal" className="nutrition-pill--cal" />
+                      <MacroPill value={activeDayData.proteinG} unit="g protein" className="nutrition-pill--protein" />
+                      <MacroPill value={activeDayData.carbsG} unit="g carbs" className="nutrition-pill--carbs" />
+                      <MacroPill value={activeDayData.fatG} unit="g fat" className="nutrition-pill--fat" />
+                      <MacroPill value={activeDayData.fiberG} unit="g fiber" className="nutrition-pill--fiber" />
+                    </div>
+                  ) : null}
+
+                  {/* Meal list */}
+                  <ul className="day-nutrition__meals">
+                    {activeDayIncluded.map((entry) => (
+                      <li key={entry.id} className="day-nutrition__meal">
+                        <span className="day-nutrition__meal-name">{entryLabel(entry)}</span>
+                        <span className="day-nutrition__meal-slot">{entry.mealSlot}</span>
+                      </li>
+                    ))}
+                    {activeDayExcluded.map((entry) => (
+                      <li key={entry.id} className="day-nutrition__meal day-nutrition__meal--excluded">
+                        <span className="day-nutrition__meal-name">{entryLabel(entry)}</span>
+                        <span className="day-nutrition__meal-badge">no nutrition data</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          </div>
         </>
       )}
     </section>

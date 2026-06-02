@@ -37,11 +37,26 @@ afterEach(() => {
  * the requested weekStart, so each navigated week renders a distinct, week-
  * specific meal. Returns the set of weekStarts that were actually requested.
  */
+const EMPTY_DAILY_SUMMARY = Array.from({ length: 7 }, (_, i) => ({
+  dayOfWeek: i, hasData: false, calories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0,
+}));
+const EMPTY_WEEKLY_SUMMARY = {
+  weekStartDate: '', totals: { calories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 },
+  countedEntryIds: [], excludedEntryIds: [],
+};
+
 function mockPerWeekEntries(): { requested: string[] } {
   const requested: string[] = [];
   vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
     const url = typeof input === 'string' ? input : String(input);
-    const weekStart = new URL(url, 'http://x').searchParams.get('weekStart')!;
+    const parsed = new URL(url, 'http://x');
+    if (parsed.pathname.endsWith('/plans/daily-summary')) {
+      return Promise.resolve(new Response(JSON.stringify(EMPTY_DAILY_SUMMARY), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    }
+    if (parsed.pathname.endsWith('/plans/summary')) {
+      return Promise.resolve(new Response(JSON.stringify(EMPTY_WEEKLY_SUMMARY), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    }
+    const weekStart = parsed.searchParams.get('weekStart')!;
     requested.push(weekStart);
     const body = [
       {
@@ -74,7 +89,7 @@ describe('WeeklyPlanner week navigation (AC-3.1/AC-3.2)', () => {
     renderWithClient(<WeeklyPlanner />);
 
     // The initial week renders something.
-    await screen.findByText(/^Meal for /);
+    await screen.findAllByText(/^Meal for /);
     const initialWeek = requested[0]!;
 
     // Compute the expected adjacent Mondays by date arithmetic (the test's own
@@ -88,13 +103,13 @@ describe('WeeklyPlanner week navigation (AC-3.1/AC-3.2)', () => {
 
     // Navigate to the previous week.
     fireEvent.click(screen.getByRole('button', { name: /previous week/i }));
-    expect(await screen.findByText(`Meal for ${prevIso}`)).toBeTruthy();
+    expect((await screen.findAllByText(`Meal for ${prevIso}`)).length).toBeGreaterThan(0);
 
     // Navigate forward twice (back to initial, then to next).
     fireEvent.click(screen.getByRole('button', { name: /next week/i }));
-    expect(await screen.findByText(`Meal for ${initialWeek}`)).toBeTruthy();
+    expect((await screen.findAllByText(`Meal for ${initialWeek}`)).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: /next week/i }));
-    expect(await screen.findByText(`Meal for ${nextIso}`)).toBeTruthy();
+    expect((await screen.findAllByText(`Meal for ${nextIso}`)).length).toBeGreaterThan(0);
 
     expect(requested).toContain(prevIso);
     expect(requested).toContain(nextIso);
@@ -108,7 +123,14 @@ describe('WeeklyPlanner week load failure (AC-3.4)', () => {
     let attempt = 0;
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const url = typeof input === 'string' ? input : String(input);
-      const weekStart = new URL(url, 'http://x').searchParams.get('weekStart')!;
+      const parsed = new URL(url, 'http://x');
+      if (parsed.pathname.endsWith('/plans/daily-summary')) {
+        return Promise.resolve(new Response(JSON.stringify(EMPTY_DAILY_SUMMARY), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (parsed.pathname.endsWith('/plans/summary')) {
+        return Promise.resolve(new Response(JSON.stringify(EMPTY_WEEKLY_SUMMARY), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      const weekStart = parsed.searchParams.get('weekStart')!;
       attempt += 1;
       // First load fails; the retry (second attempt) succeeds.
       if (attempt === 1) {

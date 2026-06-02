@@ -55,7 +55,15 @@ describe('WeeklyPlanner', () => {
     // echo that back as the entry's weekStartDate so it lands in the grid.
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const url = typeof input === 'string' ? input : String(input);
-      const weekStart = new URL(url, 'http://x').searchParams.get('weekStart');
+      const parsed = new URL(url, 'http://x');
+      // Route nutrition summary endpoints so they don't interfere with plan-list assertions.
+      if (parsed.pathname.endsWith('/plans/daily-summary')) {
+        return Promise.resolve(new Response(JSON.stringify(Array.from({ length: 7 }, (_, i) => ({ dayOfWeek: i, hasData: false, calories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 }))), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (parsed.pathname.endsWith('/plans/summary')) {
+        return Promise.resolve(new Response(JSON.stringify({ weekStartDate: '', totals: { calories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 }, countedEntryIds: [], excludedEntryIds: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      const weekStart = parsed.searchParams.get('weekStart');
       const body = [
         {
           id: '11111111-1111-1111-1111-111111111111',

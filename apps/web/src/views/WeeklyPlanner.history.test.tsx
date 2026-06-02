@@ -51,6 +51,12 @@ describe('WeeklyPlanner history retained across navigation (AC-3.3)', () => {
       // The weekly summary (GET /plans/summary) also fetches per week; this
       // test counts the PLAN-LIST reads only, so route the summary to its own
       // (macros-only) body and leave the per-week plan-fetch count untouched.
+      if (parsed.pathname.endsWith('/plans/daily-summary')) {
+        return Promise.resolve(new Response(
+          JSON.stringify(Array.from({ length: 7 }, (_, i) => ({ dayOfWeek: i, hasData: false, calories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 }))),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ));
+      }
       if (parsed.pathname.endsWith('/plans/summary')) {
         return Promise.resolve(
           new Response(

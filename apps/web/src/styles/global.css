@@ -1826,6 +1826,180 @@ label {
   padding: 10px 12px;
 }
 
+/* ── Average + macro pills ─────────────────────────────────────────────────── */
+.weekly-nutrition-summary__avg {
+  margin-bottom: 16px;
+}
+
+.weekly-nutrition-summary__avg-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.weekly-nutrition-summary__avg-sub {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 10px;
+  color: var(--light);
+}
+
+.weekly-nutrition-summary__avg-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Generic pill; variant classes add accent colour */
+.nutrition-pill {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--chip-bg);
+  color: var(--med);
+}
+
+.nutrition-pill--cal     { background: rgba(58,52,40,0.08); color: var(--dark); }
+.nutrition-pill--protein { background: rgba(196,122,90,0.12); color: var(--protein); }
+.nutrition-pill--carbs   { background: rgba(212,169,106,0.12); color: var(--carbs); }
+.nutrition-pill--fat     { background: rgba(138,171,127,0.12); color: var(--fat); }
+.nutrition-pill--fiber   { background: rgba(122,158,181,0.12); color: var(--fiber); }
+
+/* ── Day-by-day tab view ───────────────────────────────────────────────────── */
+.day-nutrition {}
+
+.day-nutrition__tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+}
+
+.day-nutrition__tab {
+  position: relative;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 7px 10px 6px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--light);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.day-nutrition__tab:hover {
+  color: var(--muted);
+}
+
+.day-nutrition__tab--active {
+  color: var(--dark);
+  border-bottom-color: var(--dark);
+  font-weight: 600;
+}
+
+/* Small dot indicating the day has meals */
+.day-nutrition__tab-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--fat);
+  flex-shrink: 0;
+}
+
+.day-nutrition__tab--active .day-nutrition__tab-dot {
+  background: var(--dark);
+}
+
+.day-nutrition__panel {
+  padding: 12px 2px 0;
+}
+
+.day-nutrition__day-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dark);
+  margin: 0 0 10px;
+  font-family: var(--font-body);
+}
+
+/* Day total pills */
+.day-nutrition__totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+/* Meal list inside a day tab */
+.day-nutrition__meals {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.day-nutrition__meal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-control);
+  font-size: 12px;
+}
+
+.day-nutrition__meal--excluded {
+  opacity: 0.65;
+}
+
+.day-nutrition__meal-name {
+  flex: 1;
+  font-weight: 500;
+  color: var(--dark);
+  word-break: break-word;
+}
+
+.day-nutrition__meal-slot {
+  font-size: 10px;
+  color: var(--light);
+  text-transform: capitalize;
+  flex-shrink: 0;
+}
+
+.day-nutrition__meal-badge {
+  font-size: 10px;
+  color: var(--light);
+  background: var(--chip-bg);
+  padding: 2px 7px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.day-nutrition__empty {
+  font-size: 12px;
+  color: var(--light);
+  margin: 8px 0;
+}
+
 /* ── Planned-meal detail panel ─────────────────────────────────────────────── */
 .planned-meal-detail {
   background: var(--card);
