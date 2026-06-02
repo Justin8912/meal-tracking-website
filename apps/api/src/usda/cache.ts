@@ -111,12 +111,39 @@ export function createCachedUsdaClient(
     }
   }
 
+  /**
+   * Apply Atwater calorie derivation to a NormalizedFood. The cache stores
+   * pre-serialized NormalizedFood objects, so the mapper's post-processing
+   * doesn't run on cache hits. This ensures calories are always derived from
+   * macros when the stored object lacks them — regardless of cache hit/miss.
+   */
+  function ensureCalories(food: NormalizedFood): NormalizedFood {
+    const p = food.per100g;
+    if (
+      p.calories === undefined &&
+      (p.proteinG !== undefined || p.carbsG !== undefined || p.fatG !== undefined)
+    ) {
+      const derived =
+        (p.proteinG ?? 0) * 4 + (p.carbsG ?? 0) * 4 + (p.fatG ?? 0) * 9;
+      return {
+        ...food,
+        per100g: {
+          ...p,
+          calories: Math.round(derived * 10) / 10,
+        },
+      };
+    }
+    return food;
+  }
+
   return {
     async searchFoods(query: string): Promise<NormalizedFood[]> {
-      return throughCache(searchKey(query), () => inner.searchFoods(query));
+      const results = await throughCache(searchKey(query), () => inner.searchFoods(query));
+      return results.map(ensureCalories);
     },
     async getFood(fdcId: string): Promise<NormalizedFood> {
-      return throughCache(fdcId, () => inner.getFood(fdcId));
+      const food = await throughCache(fdcId, () => inner.getFood(fdcId));
+      return ensureCalories(food);
     },
   };
 }
