@@ -11,7 +11,9 @@ import {
   primaryKey,
   index,
   unique,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { isNotNull } from 'drizzle-orm';
 import type { Micronutrient } from '@meal-tracking/shared';
 
 /**
@@ -88,7 +90,14 @@ export const ingredients = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [index('idx_ingredients_workspace_id').on(table.workspaceId)],
+  (table) => [
+    index('idx_ingredients_workspace_id').on(table.workspaceId),
+    // Partial unique index: one USDA snapshot per fdc_id per workspace.
+    // Custom ingredients (fdcId IS NULL) are unaffected.
+    uniqueIndex('idx_ingredients_workspace_fdc_id')
+      .on(table.workspaceId, table.fdcId)
+      .where(isNotNull(table.fdcId)),
+  ],
 );
 
 /** An owned recipe. */

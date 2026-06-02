@@ -246,8 +246,10 @@ export function registerIngredientsRoutes(
       const workspaceId = await resolveWorkspaceId(_db);
       let row: IngredientRow | undefined;
       try {
-        // Snapshot per-100g macros; absent USDA nutrients stay NULL (unknown,
-        // never zero - S-6). Parameterized Drizzle insert (S-4).
+        // Insert-or-fetch: if the same fdc_id was already snapshotted for this
+        // workspace, the partial unique index fires. onConflictDoNothing()
+        // returns an empty array; we then fetch the existing row and return it
+        // so the caller always gets a valid ingredient (never a duplicate).
         const inserted = await _db
           .insert(ingredients)
           .values({
@@ -268,8 +270,24 @@ export function registerIngredientsRoutes(
             fiberG: p.fiberG !== undefined ? String(p.fiberG) : null,
             micronutrients: p.micronutrients,
           })
+          .onConflictDoNothing()
           .returning();
         row = inserted[0];
+
+        // Conflict hit: an identical snapshot already exists — fetch it.
+        if (!row) {
+          const existing = await _db
+            .select()
+            .from(ingredients)
+            .where(
+              and(
+                eq(ingredients.workspaceId, workspaceId),
+                eq(ingredients.fdcId, food.fdcId),
+              ),
+            )
+            .limit(1);
+          row = existing[0];
+        }
       } catch (err) {
         throw new PersistenceError('Failed to snapshot USDA ingredient', {
           cause: err,
@@ -280,7 +298,7 @@ export function registerIngredientsRoutes(
       }
 
       const body = ingredientResponseSchema.parse(toIngredientResponse(row));
-      return reply.code(201).send(body);
+      return reply.code(200).send(body);
     },
   );
 
