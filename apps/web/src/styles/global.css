@@ -2185,3 +2185,62 @@ label {
   padding: 48px 24px;
   text-align: center;
 }
+
+/* ── Mobile single-day panel (< 1000px, non-edit view) ───────────────────── */
+.mobile-day-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mobile-day-panel__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mobile-day-panel__heading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.mobile-day-panel__day-name {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--dark);
+}
+
+.mobile-day-panel__date {
+  font-size: 12px;
+  color: var(--light);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mobile-day-panel__date--today {
+  color: var(--protein);
+}
+
+.mobile-day-panel__today-badge {
+  background: var(--protein);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+}
+
+.mobile-day-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mobile-day-panel__list .weekly-planner__day h2 {
+  display: none;
+}

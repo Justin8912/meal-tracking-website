@@ -77,7 +77,7 @@ export const router = createBrowserRouter([
     path: '/',
     element: <AppLayout />,
     children: [
-      { index: true, element: <Navigate to="/library" replace /> },
+      { index: true, element: <Navigate to="/planner" replace /> },
       { path: 'library', element: <MealLibrary /> },
       { path: 'planner', element: <WeeklyPlanner /> },
     ],

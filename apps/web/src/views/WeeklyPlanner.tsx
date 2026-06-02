@@ -1,4 +1,4 @@
-import { useState, Fragment, type FormEvent } from 'react';
+import { useState, useEffect, Fragment, type FormEvent } from 'react';
 import type { MealSlot, PlanEntry, PlanEntryInput } from '@meal-tracking/shared';
 import { planEntryInputSchema } from '@meal-tracking/shared';
 import { ApiError } from '../api/client.js';
@@ -639,16 +639,114 @@ function PlannerGrid({
   );
 }
 
+function useWindowWidth(): number {
+  const [width, setWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const handler = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return width;
+}
+
+function todayDayIndex(): number {
+  const dow = new Date().getUTCDay(); // 0=Sun..6=Sat
+  return (dow + 6) % 7; // Mon=0..Sun=6
+}
+
+function MobileDayPanel({
+  weekStart,
+  byDay,
+  dates,
+  dayIdx,
+  onChangeDay,
+}: {
+  weekStart: string;
+  byDay: Map<number, PlanEntry[]>;
+  dates: Date[];
+  dayIdx: number;
+  onChangeDay: (idx: number) => void;
+}): JSX.Element {
+  const date = dates[dayIdx]!;
+  const today = new Date();
+  const todayUtcStr = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}-${String(today.getUTCDate()).padStart(2, '0')}`;
+  const isToday = date.toISOString().slice(0, 10) === todayUtcStr;
+  const dateLabel = `${MONTH_NAMES[date.getUTCMonth()]} ${date.getUTCDate()}`;
+
+  return (
+    <div className="mobile-day-panel">
+      <div className="mobile-day-panel__nav">
+        <button
+          type="button"
+          className="week-nav__arrow"
+          aria-label="Previous day"
+          disabled={dayIdx === 0}
+          onClick={() => onChangeDay(dayIdx - 1)}
+        >
+          <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden>
+            <polyline
+              points="9,3 5,7 9,11"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+
+        <div className="mobile-day-panel__heading">
+          <span className="mobile-day-panel__day-name">{DAY_LABELS[dayIdx]}</span>
+          <span className={`mobile-day-panel__date${isToday ? ' mobile-day-panel__date--today' : ''}`}>
+            {dateLabel}
+            {isToday ? (
+              <span className="mobile-day-panel__today-badge">Today</span>
+            ) : null}
+          </span>
+        </div>
+
+        <button
+          type="button"
+          className="week-nav__arrow"
+          aria-label="Next day"
+          disabled={dayIdx === 6}
+          onClick={() => onChangeDay(dayIdx + 1)}
+        >
+          <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden>
+            <polyline
+              points="5,3 9,7 5,11"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </div>
+
+      <ul className="mobile-day-panel__list" aria-label={`${DAY_LABELS[dayIdx]} meals`}>
+        <DayCell
+          label={DAY_LABELS[dayIdx]!}
+          weekStart={weekStart}
+          dayOfWeek={dayIdx}
+          entries={byDay.get(dayIdx) ?? []}
+        />
+      </ul>
+    </div>
+  );
+}
+
 export function WeeklyPlanner(): JSX.Element {
   // The active week's Monday DATE is the ONLY navigation state (AD-2). It starts
   // at the current week and shifts by +/- 7 days via shiftWeek for back/forward
   // navigation; the displayed week is derived entirely from the week-keyed
   // server query below, so no plan data lives in component state (AC-3.3).
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
-  // Edit mode reveals the two-panel layout (palette left, week right, AC-4.1).
-  // The drag/tap-to-assign wiring lives in STEP-20; this flag only governs the
-  // layout and the palette's presence.
   const [editMode, setEditMode] = useState(false);
+  const [mobileDayIdx, setMobileDayIdx] = useState(() => todayDayIndex());
+  const windowWidth = useWindowWidth();
+  const isMobile = windowWidth < 1000;
   const {
     data: entries,
     isLoading,
@@ -741,7 +839,10 @@ export function WeeklyPlanner(): JSX.Element {
               <button
                 type="button"
                 className="week-nav__today"
-                onClick={() => setWeekStart(todayMonday)}
+                onClick={() => {
+                  setWeekStart(todayMonday);
+                  setMobileDayIdx(todayDayIndex());
+                }}
               >
                 Today
               </button>
@@ -779,12 +880,15 @@ export function WeeklyPlanner(): JSX.Element {
       </nav>
 
       {editMode && !isLoading && !isError ? (
-        // Edit mode: the WeekGrid renders the two-panel layout (palette LEFT,
-        // week RIGHT >=768px; single column on phones, NFR-2, AC-4.1) inside a
-        // dnd-kit DndContext, so a recipe can be dragged or tapped onto a
-        // day/slot (AC-4.3/4.4). The loading/error states still use the plain
-        // `week` block so a failed load shows the retry, not an empty grid.
         <WeekGrid weekStart={weekStart} byDay={byDay} />
+      ) : isMobile && !isLoading && !isError ? (
+        <MobileDayPanel
+          weekStart={weekStart}
+          byDay={byDay}
+          dates={dates}
+          dayIdx={mobileDayIdx}
+          onChangeDay={setMobileDayIdx}
+        />
       ) : (
         week
       )}
