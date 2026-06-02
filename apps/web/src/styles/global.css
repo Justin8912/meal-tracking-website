@@ -954,6 +954,87 @@ label {
   font-weight: 400;
 }
 
+/* 2-column grid for the compact nutrition + serving-size fields */
+.ingredient-picker__custom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* Section sub-heading inside the custom form */
+.ingredient-picker__custom-section {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 4px 0 0;
+}
+
+/* Toggle button for the optional volume-conversions section */
+.ingredient-picker__toggle-volume {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: left;
+  width: auto;
+}
+
+/* Volume conversions grid: 2 columns of unit→grams inputs */
+.ingredient-picker__volume-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: var(--card);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-light);
+}
+
+/* Delete confirm inline row for saved custom ingredients */
+.ingredient-picker__delete-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--danger);
+  margin-left: 6px;
+}
+
+.ingredient-picker__delete-confirm button {
+  font-size: 11px;
+  padding: 2px 8px;
+  width: auto;
+}
+
+.ingredient-picker__delete-yes {
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Small delete × button next to custom saved ingredients */
+.ingredient-picker__delete-btn {
+  background: none;
+  border: none;
+  padding: 0 4px;
+  font-size: 14px;
+  color: var(--light);
+  cursor: pointer;
+  line-height: 1;
+  width: auto;
+  margin-left: 4px;
+}
+.ingredient-picker__delete-btn:hover {
+  color: var(--danger);
+}
+
 /* ── Weekly planner view ───────────────────────────────────────────────────── */
 /* The view sits inside the white .panel card; its sections get internal padding
    and dividers rather than their own surfaces. */

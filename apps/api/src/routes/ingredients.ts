@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { micronutrientSchema } from '@meal-tracking/shared';
 import type { Micronutrient } from '@meal-tracking/shared';
@@ -348,4 +348,47 @@ export function registerIngredientsRoutes(
     const body = ingredientListSchema.parse(rows.map(toIngredientResponse));
     return reply.code(200).send(body);
   });
+
+  // DELETE /ingredients/:id — remove a custom ingredient from the workspace.
+  // Only custom (user-created) ingredients should be deletable; USDA snapshots
+  // are shared reference data and deleting them would silently corrupt any
+  // recipe that references them. Returns 204 on success, 404 if not found,
+  // 400 if the ingredient is USDA-sourced.
+  app.delete<{ Params: { id: string } }>(
+    '/ingredients/:id',
+    async (request, reply) => {
+      const workspaceId = await resolveWorkspaceId(_db);
+      const { id } = request.params;
+
+      const rows = await _db
+        .select()
+        .from(ingredients)
+        .where(and(eq(ingredients.id, id), eq(ingredients.workspaceId, workspaceId)));
+
+      const row = rows[0];
+      if (!row) {
+        return reply.code(404).send({
+          error: { code: 'NOT_FOUND', message: 'Ingredient not found' },
+        });
+      }
+      if (row.source !== 'custom') {
+        return reply.code(400).send({
+          error: {
+            code: 'NOT_DELETABLE',
+            message: 'Only custom ingredients can be deleted. USDA-sourced ingredients are shared reference data.',
+          },
+        });
+      }
+
+      try {
+        await _db
+          .delete(ingredients)
+          .where(and(eq(ingredients.id, id), eq(ingredients.workspaceId, workspaceId)));
+      } catch (err) {
+        throw new PersistenceError('Failed to delete ingredient', { cause: err });
+      }
+
+      return reply.code(204).send();
+    },
+  );
 }

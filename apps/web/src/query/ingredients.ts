@@ -1,6 +1,7 @@
 import {
   useMutation,
   useQuery,
+  useQueryClient,
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
@@ -197,5 +198,28 @@ export function useCreateCustomIngredient(): UseMutationResult<
   Error,
   CustomIngredientInput
 > {
-  return useMutation({ mutationFn: createCustomIngredient });
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createCustomIngredient,
+    onSuccess: () => {
+      // Invalidate the saved-ingredients list so the new item appears in search.
+      void queryClient.invalidateQueries({ queryKey: ['ingredients'] });
+    },
+  });
+}
+
+/** Delete a custom ingredient (DELETE /ingredients/:id). Only source='custom' items. */
+async function deleteIngredient(id: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/ingredients/${id}`, { method: 'DELETE' });
+}
+
+/** Mutation: permanently delete a custom ingredient from the workspace. */
+export function useDeleteIngredient(): UseMutationResult<void, Error, string> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteIngredient,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ingredients'] });
+    },
+  });
 }
