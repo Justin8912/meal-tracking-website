@@ -421,11 +421,15 @@ function CustomIngredientForm({
 
     if (servingUnit === 'g') {
       referenceGrams = amount;
+    } else if (servingUnit === 'oz') {
+      // oz is a universal weight unit — convert to real grams so the engine's
+      // built-in 28.3495 g/oz fallback handles recipe usage without any override.
+      referenceGrams = amount * 28.3495;
     } else if (servingUnit === 'qty') {
       referenceGrams = 1;
       gramWeightPerQty = 1 / amount;
     } else {
-      // oz and all volume units
+      // Volume units (tsp, tbsp, fl oz, cup, quart)
       referenceGrams = 1;
       unitGramEquivalents = { [servingUnit]: 1 / amount };
     }

@@ -20,13 +20,20 @@ import type { GramResult, NutritionIngredient } from './types.js';
 const GRAM_UNIT = 'g';
 /** The count unit code resolved via the ingredient's usual weight. */
 const QTY_UNIT = 'qty';
+/** Ounce is a universal weight unit — 1 oz = 28.3495 g regardless of ingredient. */
+const OZ_UNIT = 'oz';
+const OZ_TO_GRAMS = 28.3495;
 
 /**
  * Resolve a usage `(quantity, unitCode)` to grams for a specific ingredient.
  *
- * - `g`  -> the quantity is already grams.
- * - `qty` -> quantity * ingredient.gramWeightPerQty (flagged if unknown).
- * - otherwise -> quantity * ingredient.gramEquivalents[unitCode] (flagged if
+ * - `g`   -> the quantity is already grams.
+ * - `oz`  -> quantity × 28.3495, unless the ingredient has a per-ingredient
+ *            override in gramEquivalents (supports the virtual-gram model used
+ *            by custom ingredients). The universal fallback means USDA
+ *            ingredients work with oz without a stored gram-equivalent.
+ * - `qty` -> quantity × ingredient.gramWeightPerQty (flagged if unknown).
+ * - otherwise -> quantity × ingredient.gramEquivalents[unitCode] (flagged if
  *   this ingredient has no gram-equivalent for that unit).
  */
 export function toGrams(
@@ -36,6 +43,11 @@ export function toGrams(
 ): GramResult {
   if (unitCode === GRAM_UNIT) {
     return { resolved: true, grams: quantity };
+  }
+
+  if (unitCode === OZ_UNIT) {
+    const override = ingredient.gramEquivalents[OZ_UNIT];
+    return { resolved: true, grams: quantity * (override ?? OZ_TO_GRAMS) };
   }
 
   if (unitCode === QTY_UNIT) {
