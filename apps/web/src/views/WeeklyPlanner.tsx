@@ -724,10 +724,10 @@ function MobileDayContent({
 
       {mode.kind === 'none' ? (
         <div className="mobile-day-content__actions">
-          <button type="button" onClick={() => setMode({ kind: 'add' })}>
+          <button type="button" className="btn btn--secondary" onClick={() => setMode({ kind: 'add' })}>
             Add meal
           </button>
-          <button type="button" onClick={() => setMode({ kind: 'add-recipe' })}>
+          <button type="button" className="btn btn--primary" onClick={() => setMode({ kind: 'add-recipe' })}>
             Add recipe
           </button>
         </div>

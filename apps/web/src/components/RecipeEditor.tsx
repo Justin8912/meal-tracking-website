@@ -405,7 +405,7 @@ export function RecipeEditor({
                       incomplete data
                     </span>
                   ) : null}
-                  <button type="button" onClick={() => removeLine(line.key)}>
+                  <button type="button" className="btn btn--danger" onClick={() => removeLine(line.key)}>
                     Remove
                   </button>
                 </li>

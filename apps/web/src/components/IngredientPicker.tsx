@@ -376,10 +376,11 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
 
       <button
         type="button"
+        className="btn btn--secondary"
         onClick={() => setShowCustom((v) => !v)}
         aria-expanded={showCustom}
       >
-        Add a custom ingredient
+        {showCustom ? 'Cancel' : 'Add a custom ingredient'}
       </button>
 
       {showCustom ? (
@@ -540,6 +541,7 @@ function CustomIngredientForm({
       ) : null}
       <button
         type="button"
+        className="btn btn--primary"
         onClick={submitCustom}
         disabled={create.isPending}
       >
