@@ -1,0 +1,36 @@
+name: Deploy Application
+
+on:
+    workflow_dispatch:
+    push:
+        branches:
+            - main
+
+jobs:
+    deploy_application:
+        name: Deploy Docker Image
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              
+            - name: Authenticate with DockerHub
+              uses: docker/login-action@v1
+              with:
+                username: "justin8912"
+                password: ${{ secrets.DOCKERHUB_PAT}}
+        
+            - name: Upload UI
+              shell: bash
+              run: |
+                cd apps/web
+                docker build . -t justin8912/meal-tracking-website-ui
+                docker push justin8912/meal-tracking-website-ui:latest
+                cd -
+
+            - name: Upload API
+              shell: bash
+              run: |
+                cd apps/api
+                docker build . -t justin8912/meal-tracking-website-api
+                docker push justin8912/meal-tracking-website-api:latest
