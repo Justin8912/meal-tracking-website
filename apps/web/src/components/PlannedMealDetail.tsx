@@ -41,6 +41,11 @@ export interface PlannedMealDetailProps {
   entry: PlanEntry;
 }
 
+function formatQty(qty: number): string {
+  const rounded = Math.round(qty * 100) / 100;
+  return rounded % 1 === 0 ? String(rounded) : rounded.toFixed(2).replace(/\.?0+$/, '');
+}
+
 /**
  * Build the shared-engine lines for a recipe: join its ingredient usage (from
  * the recipe detail) to the per-`referenceGrams` ingredient nutrition (from the
@@ -130,6 +135,22 @@ function RecipeMealBody({ recipeId }: { recipeId: string }): JSX.Element {
         <p>
           <a href={recipe.sourceLink}>Recipe link</a>
         </p>
+      ) : null}
+
+      {recipe.ingredients.length > 0 ? (
+        <section aria-label="Ingredients" className="planned-meal-detail__ingredients-section">
+          <h4>Ingredients</h4>
+          <ul className="planned-meal-detail__ingredients">
+            {recipe.ingredients.map((ing) => (
+              <li key={ing.ingredientId}>
+                <span className="planned-meal-detail__ing-qty">
+                  {formatQty(ing.quantity)} {ing.unitCode}
+                </span>
+                <span className="planned-meal-detail__ing-name">{ing.name}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       <section aria-label="Per-serving nutrition">
