@@ -654,6 +654,100 @@ function todayDayIndex(): number {
   return (dow + 6) % 7; // Mon=0..Sun=6
 }
 
+function MobileDayContent({
+  weekStart,
+  dayOfWeek,
+  entries,
+}: {
+  weekStart: string;
+  dayOfWeek: number;
+  entries: PlanEntry[];
+}): JSX.Element {
+  const [mode, setMode] = useState<
+    { kind: 'none' } | { kind: 'add' } | { kind: 'add-recipe' }
+  >({ kind: 'none' });
+  const [openDetailId, setOpenDetailId] = useState<string | null>(null);
+
+  const bySlot = new Map<MealSlot, PlanEntry[]>();
+  for (const entry of entries) {
+    const list = bySlot.get(entry.mealSlot) ?? [];
+    list.push(entry);
+    bySlot.set(entry.mealSlot, list);
+  }
+
+  return (
+    <div className="mobile-day-content">
+      {GRID_SLOTS.map((slot) => {
+        const slotEntries = bySlot.get(slot) ?? [];
+        const isEmpty = slotEntries.length === 0;
+        return (
+          <div
+            key={slot}
+            className={`mobile-day-content__slot${isEmpty ? ' mobile-day-content__slot--empty' : ''}`}
+            style={{ borderLeft: `3px solid ${SLOT_COLORS[slot]}` }}
+          >
+            <span
+              className="mobile-day-content__slot-label"
+              style={{ color: SLOT_COLORS[slot] }}
+            >
+              {slot}
+            </span>
+            {isEmpty ? (
+              <span className="mobile-day-content__empty">—</span>
+            ) : (
+              <ul className="mobile-day-content__meals">
+                {slotEntries.map((entry) => {
+                  const detailOpen = openDetailId === entry.id;
+                  return (
+                    <li key={entry.id} className="mobile-day-content__meal">
+                      <button
+                        type="button"
+                        aria-expanded={detailOpen}
+                        className="mobile-day-content__meal-btn"
+                        onClick={() =>
+                          setOpenDetailId((id) =>
+                            id === entry.id ? null : entry.id,
+                          )
+                        }
+                      >
+                        {entryLabel(entry)}
+                      </button>
+                      {detailOpen ? <PlannedMealDetail entry={entry} /> : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+
+      {mode.kind === 'none' ? (
+        <div className="mobile-day-content__actions">
+          <button type="button" onClick={() => setMode({ kind: 'add' })}>
+            Add meal
+          </button>
+          <button type="button" onClick={() => setMode({ kind: 'add-recipe' })}>
+            Add recipe
+          </button>
+        </div>
+      ) : mode.kind === 'add' ? (
+        <DayMealForm
+          weekStart={weekStart}
+          dayOfWeek={dayOfWeek}
+          onDone={() => setMode({ kind: 'none' })}
+        />
+      ) : (
+        <DayRecipeForm
+          weekStart={weekStart}
+          dayOfWeek={dayOfWeek}
+          onDone={() => setMode({ kind: 'none' })}
+        />
+      )}
+    </div>
+  );
+}
+
 function MobileDayPanel({
   weekStart,
   byDay,
@@ -725,14 +819,11 @@ function MobileDayPanel({
         </button>
       </div>
 
-      <ul className="mobile-day-panel__list" aria-label={`${DAY_LABELS[dayIdx]} meals`}>
-        <DayCell
-          label={DAY_LABELS[dayIdx]!}
-          weekStart={weekStart}
-          dayOfWeek={dayIdx}
-          entries={byDay.get(dayIdx) ?? []}
-        />
-      </ul>
+      <MobileDayContent
+        weekStart={weekStart}
+        dayOfWeek={dayIdx}
+        entries={byDay.get(dayIdx) ?? []}
+      />
     </div>
   );
 }
