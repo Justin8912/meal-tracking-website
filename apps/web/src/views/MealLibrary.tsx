@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { MealType, Recipe, RecipeDetail } from '@meal-tracking/shared';
 import { useRecipes, useRecipeDetail, useDeleteRecipe } from '../query/recipes.js';
-import { useTags, useDeleteTag } from '../query/tags.js';
+import { useTags, useCreateTag, useDeleteTag } from '../query/tags.js';
 import type { Tag } from '@meal-tracking/shared';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 import { RecipeEditor, type EditorIngredientLine } from '../components/RecipeEditor.js';
@@ -365,6 +365,69 @@ function TagManagerRow({
   );
 }
 
+function TagManagerPanel({
+  tags,
+  activeFilter,
+  onFilterCleared,
+}: {
+  tags: Tag[];
+  activeFilter: string;
+  onFilterCleared: () => void;
+}): JSX.Element {
+  const [newLabel, setNewLabel] = useState('');
+  const createTag = useCreateTag();
+
+  function handleAdd(): void {
+    const label = newLabel.trim();
+    if (!label) return;
+    createTag.mutate(label, { onSuccess: () => setNewLabel('') });
+  }
+
+  return (
+    <div className="tag-manager" aria-label="Manage tags">
+      <ul className="tag-manager__list">
+        {tags.map((t) => (
+          <TagManagerRow
+            key={t.id}
+            tag={t}
+            onDeleted={() => {
+              if (activeFilter === t.label) onFilterCleared();
+            }}
+          />
+        ))}
+      </ul>
+      <div className="tag-manager__add-row">
+        <input
+          type="text"
+          className="tag-manager__add-input"
+          placeholder="New tag name…"
+          value={newLabel}
+          onChange={(e) => setNewLabel(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleAdd();
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="btn btn--primary tag-manager__add-btn"
+          disabled={newLabel.trim() === '' || createTag.isPending}
+          onClick={handleAdd}
+        >
+          {createTag.isPending ? '...' : 'Add tag'}
+        </button>
+      </div>
+      {createTag.error ? (
+        <p role="alert" className="tag-manager__error">
+          {createTag.error.message}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function MealLibrary(): JSX.Element {
   const [mealType, setMealType] = useState('');
   const [tag, setTag] = useState('');
@@ -471,19 +534,11 @@ export function MealLibrary(): JSX.Element {
                 </button>
               </div>
               {showTagManager ? (
-                <div className="tag-manager" aria-label="Manage tags">
-                  <ul className="tag-manager__list">
-                    {availableTags.map((t) => (
-                      <TagManagerRow
-                        key={t.id}
-                        tag={t}
-                        onDeleted={() => {
-                          if (tag === t.label) setTag('');
-                        }}
-                      />
-                    ))}
-                  </ul>
-                </div>
+                <TagManagerPanel
+                  tags={availableTags}
+                  activeFilter={tag}
+                  onFilterCleared={() => setTag('')}
+                />
               ) : null}
             </>
           ) : null}

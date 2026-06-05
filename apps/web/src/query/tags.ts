@@ -20,6 +20,24 @@ export function useTags(): UseQueryResult<Tag[], Error> {
   return useQuery({ queryKey: tagsQueryKey(), queryFn: fetchTags });
 }
 
+async function createTag(label: string): Promise<void> {
+  await apiFetch<unknown>('/api/v1/tags', {
+    method: 'POST',
+    body: JSON.stringify({ label }),
+  });
+}
+
+/** Mutation: create a new workspace tag by label (idempotent — existing label is a no-op). */
+export function useCreateTag(): UseMutationResult<void, Error, string> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createTag,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: tagsQueryKey() });
+    },
+  });
+}
+
 async function deleteTag(id: string): Promise<void> {
   await apiFetch<void>(`/api/v1/tags/${id}`, { method: 'DELETE' });
 }

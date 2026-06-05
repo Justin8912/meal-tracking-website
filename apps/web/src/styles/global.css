@@ -916,32 +916,37 @@ label {
   color: var(--protein);
 }
 
-.tag-picker__controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
 .tag-picker__select {
-  flex: 1;
-  min-width: 120px;
+  width: 100%;
 }
 
-.tag-picker__new {
+.tag-picker__empty-hint {
+  font-size: 12px;
+  color: var(--light);
+  margin: 0;
+}
+
+.tag-manager__add-row {
   display: flex;
-  gap: 4px;
-  flex: 1;
-  min-width: 140px;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
 }
 
-.tag-picker__new-input {
+.tag-manager__add-input {
   flex: 1;
   min-width: 0;
 }
 
-.tag-picker__new-btn {
+.tag-manager__add-btn {
   flex-shrink: 0;
+}
+
+.tag-manager__error {
+  font-size: 12px;
+  color: var(--danger);
+  margin: 4px 0 0;
 }
 
 .recipe-editor__ingredients {

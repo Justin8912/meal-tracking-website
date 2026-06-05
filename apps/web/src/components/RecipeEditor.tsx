@@ -100,23 +100,14 @@ function TagPicker({
   selected: string[];
   onChange: (tags: string[]) => void;
 }): JSX.Element {
-  const [newTag, setNewTag] = useState('');
   const tagsQuery = useTags();
   const workspaceTags = tagsQuery.data ?? [];
   const available = workspaceTags.filter((t) => !selected.includes(t.label));
 
-  function addFromDropdown(label: string): void {
+  function add(label: string): void {
     if (label && !selected.includes(label)) {
       onChange([...selected, label]);
     }
-  }
-
-  function addNew(): void {
-    const label = newTag.trim();
-    if (label && !selected.includes(label)) {
-      onChange([...selected, label]);
-    }
-    setNewTag('');
   }
 
   function remove(label: string): void {
@@ -143,48 +134,26 @@ function TagPicker({
         </div>
       ) : null}
 
-      <div className="tag-picker__controls">
-        {available.length > 0 ? (
-          <select
-            className="tag-picker__select"
-            value=""
-            aria-label="Add existing tag"
-            onChange={(e) => {
-              addFromDropdown(e.target.value);
-              e.target.value = '';
-            }}
-          >
-            <option value="" disabled>Add a tag…</option>
-            {available.map((t) => (
-              <option key={t.id} value={t.label}>{t.label}</option>
-            ))}
-          </select>
-        ) : null}
-
-        <div className="tag-picker__new">
-          <input
-            type="text"
-            className="tag-picker__new-input"
-            placeholder="New tag…"
-            value={newTag}
-            onChange={(e) => setNewTag(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                addNew();
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="tag-picker__new-btn"
-            disabled={newTag.trim() === ''}
-            onClick={addNew}
-          >
-            Add
-          </button>
-        </div>
-      </div>
+      {available.length > 0 ? (
+        <select
+          className="tag-picker__select"
+          value=""
+          aria-label="Add tag"
+          onChange={(e) => {
+            add(e.target.value);
+            e.target.value = '';
+          }}
+        >
+          <option value="" disabled>Add a tag…</option>
+          {available.map((t) => (
+            <option key={t.id} value={t.label}>{t.label}</option>
+          ))}
+        </select>
+      ) : (
+        <p className="tag-picker__empty-hint">
+          No tags yet — create them in Manage tags.
+        </p>
+      )}
     </div>
   );
 }
