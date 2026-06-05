@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   computeRecipeNutrition,
   formatNutrition,
@@ -162,6 +162,29 @@ function TagPicker({
   );
 }
 
+interface RecipeDraft {
+  name: string;
+  mealType: MealType;
+  servingsText: string;
+  notes: string;
+  sourceLink: string;
+  selectedTags: string[];
+  lines: Omit<EditorIngredientLine, 'key'>[];
+}
+
+function draftKey(recipeId: string | undefined): string {
+  return `recipe-draft-${recipeId ?? 'new'}`;
+}
+
+function loadDraft(key: string): RecipeDraft | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as RecipeDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function RecipeEditor({
   recipeId,
   initialName = '',
@@ -173,16 +196,44 @@ export function RecipeEditor({
   initialIngredients = [],
   onSaved,
 }: RecipeEditorProps): JSX.Element {
-  const [name, setName] = useState(initialName);
-  const [mealType, setMealType] = useState<MealType>(initialMealType);
-  const [servingsText, setServingsText] = useState(String(initialServings));
-  const [notes, setNotes] = useState(initialNotes);
-  const [sourceLink, setSourceLink] = useState(initialSourceLink);
-  const [selectedTags, setSelectedTags] = useState<string[]>(initialTags);
-  const [lines, setLines] = useState<EditorIngredientLine[]>(initialIngredients);
+  const key = draftKey(recipeId);
+
+  // Read draft once synchronously on first render. useRef ensures subsequent
+  // re-renders don't re-read (the 'unloaded' sentinel is replaced on first pass).
+  const draftRef = useRef<RecipeDraft | null | 'unloaded'>('unloaded');
+  if (draftRef.current === 'unloaded') {
+    draftRef.current = loadDraft(key);
+  }
+  const draft = draftRef.current as RecipeDraft | null;
+
+  const [name, setName] = useState(draft?.name ?? initialName);
+  const [mealType, setMealType] = useState<MealType>(draft?.mealType ?? initialMealType);
+  const [servingsText, setServingsText] = useState(draft?.servingsText ?? String(initialServings));
+  const [notes, setNotes] = useState(draft?.notes ?? initialNotes);
+  const [sourceLink, setSourceLink] = useState(draft?.sourceLink ?? initialSourceLink);
+  const [selectedTags, setSelectedTags] = useState<string[]>(draft?.selectedTags ?? initialTags);
+  const [lines, setLines] = useState<EditorIngredientLine[]>(
+    draft?.lines
+      ? draft.lines.map((l) => ({ ...l, key: nextLineKey() }))
+      : initialIngredients,
+  );
   const [formError, setFormError] = useState<string | null>(null);
+  const [draftRestored, setDraftRestored] = useState(draft !== null);
 
   const save = useSaveRecipe();
+
+  // Debounced draft auto-save: any content change writes to localStorage after
+  // 600ms of inactivity so navigation away never loses in-progress work.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const d: RecipeDraft = {
+        name, mealType, servingsText, notes, sourceLink, selectedTags,
+        lines: lines.map(({ key: _k, ...rest }) => rest),
+      };
+      try { localStorage.setItem(key, JSON.stringify(d)); } catch { /* quota */ }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [name, mealType, servingsText, notes, sourceLink, selectedTags, lines, key]);
 
   // Live recompute: any change to lines or servings re-derives nutrition via
   // the shared engine (AC-4.4). useMemo keeps it cheap but the source of truth
@@ -256,6 +307,7 @@ export function RecipeEditor({
       { input: parsed.data, recipeId },
       {
         onSuccess: () => {
+          try { localStorage.removeItem(key); } catch { /* ignore */ }
           onSaved?.();
         },
       },
@@ -273,6 +325,29 @@ export function RecipeEditor({
       aria-label={recipeId ? 'Edit recipe' : 'New recipe'}
       onSubmit={handleSubmit}
     >
+      {draftRestored ? (
+        <div className="recipe-editor__draft-notice" role="status">
+          <span>Draft restored — your unsaved changes have been reloaded.</span>
+          <button
+            type="button"
+            className="recipe-editor__draft-discard"
+            onClick={() => {
+              try { localStorage.removeItem(key); } catch { /* ignore */ }
+              setName(initialName);
+              setMealType(initialMealType);
+              setServingsText(String(initialServings));
+              setNotes(initialNotes);
+              setSourceLink(initialSourceLink);
+              setSelectedTags(initialTags);
+              setLines(initialIngredients);
+              setDraftRestored(false);
+            }}
+          >
+            Discard draft
+          </button>
+        </div>
+      ) : null}
+
       <div className="recipe-editor__fields">
         <label>
           Name
