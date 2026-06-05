@@ -24,6 +24,8 @@ const DAY_ABBR = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 export interface WeeklyNutritionSummaryProps {
   weekStart: string;
   entries: PlanEntry[];
+  /** When set, skip the day-tab UI and show only this day (0=Mon…6=Sun). */
+  singleDay?: number;
 }
 
 function entryLabel(entry: PlanEntry): string {
@@ -55,8 +57,10 @@ function MacroPill({
 export function WeeklyNutritionSummary({
   weekStart,
   entries,
+  singleDay,
 }: WeeklyNutritionSummaryProps): JSX.Element {
   const [activeDay, setActiveDay] = useState<number>(0);
+  const displayDay = singleDay ?? activeDay;
 
   const summaryQuery = useWeeklySummary(weekStart);
   const dailyQuery = useDailyNutrition(weekStart);
@@ -89,8 +93,8 @@ export function WeeklyNutritionSummary({
   }, [summaryQuery.data, dailyQuery.data]);
 
   // The active day's server-computed totals
-  const activeDayData: DayNutrition | undefined = dailyQuery.data?.[activeDay];
-  const activeDayEntries = byDay.get(activeDay) ?? [];
+  const activeDayData: DayNutrition | undefined = dailyQuery.data?.[displayDay];
+  const activeDayEntries = byDay.get(displayDay) ?? [];
   const activeDayIncluded = activeDayEntries.filter((e) => !isExcluded(e));
   const activeDayExcluded = activeDayEntries.filter(isExcluded);
 
@@ -123,39 +127,41 @@ export function WeeklyNutritionSummary({
             </div>
           ) : null}
 
-          {/* ── Day tabs ────────────────────────────────────────────────── */}
+          {/* ── Day tabs (hidden when a single day is pinned) ───────────── */}
           <div className="day-nutrition">
-            <div className="day-nutrition__tabs" role="tablist" aria-label="Select day">
-              {DAY_ABBR.map((abbr, i) => {
-                const hasEntries = (byDay.get(i) ?? []).length > 0;
-                const isActive = activeDay === i;
-                return (
-                  <button
-                    key={abbr}
-                    type="button"
-                    role="tab"
-                    aria-selected={isActive}
-                    className={[
-                      'day-nutrition__tab',
-                      isActive ? 'day-nutrition__tab--active' : '',
-                      hasEntries ? 'day-nutrition__tab--has-data' : '',
-                    ].filter(Boolean).join(' ')}
-                    onClick={() => setActiveDay(i)}
-                  >
-                    {abbr}
-                    {hasEntries ? <span className="day-nutrition__tab-dot" aria-hidden /> : null}
-                  </button>
-                );
-              })}
-            </div>
+            {singleDay === undefined ? (
+              <div className="day-nutrition__tabs" role="tablist" aria-label="Select day">
+                {DAY_ABBR.map((abbr, i) => {
+                  const hasEntries = (byDay.get(i) ?? []).length > 0;
+                  const isActive = activeDay === i;
+                  return (
+                    <button
+                      key={abbr}
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      className={[
+                        'day-nutrition__tab',
+                        isActive ? 'day-nutrition__tab--active' : '',
+                        hasEntries ? 'day-nutrition__tab--has-data' : '',
+                      ].filter(Boolean).join(' ')}
+                      onClick={() => setActiveDay(i)}
+                    >
+                      {abbr}
+                      {hasEntries ? <span className="day-nutrition__tab-dot" aria-hidden /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
 
-            {/* Tab panel */}
+            {/* Day panel */}
             <div
-              role="tabpanel"
-              aria-label={DAY_LABELS[activeDay]}
+              role={singleDay === undefined ? 'tabpanel' : undefined}
+              aria-label={DAY_LABELS[displayDay]}
               className="day-nutrition__panel"
             >
-              <h3 className="day-nutrition__day-title">{DAY_LABELS[activeDay]}</h3>
+              <h3 className="day-nutrition__day-title">{DAY_LABELS[displayDay]}</h3>
 
               {activeDayEntries.length === 0 ? (
                 <p className="day-nutrition__empty">No meals planned.</p>

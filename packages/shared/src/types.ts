@@ -118,6 +118,8 @@ export interface Recipe {
   servings: number;
   notes: string | null;
   sourceLink: string | null;
+  /** Tag labels applied to this recipe. */
+  tags: string[];
   /** ISO 8601 timestamp. */
   createdAt: string;
   /** ISO 8601 timestamp. */

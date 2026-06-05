@@ -902,6 +902,7 @@ export function WeeklyPlanner(): JSX.Element {
         <WeeklyNutritionSummary
           weekStart={weekStart}
           entries={entries ?? []}
+          singleDay={isMobile ? mobileDayIdx : undefined}
         />
       ) : null}
     </section>

@@ -59,7 +59,7 @@ const recipeQuerySchema = z.object({
 });
 
 /** Map a persisted recipe DB row to the shared core Recipe response shape. */
-function toRecipe(row: RecipeRow): Recipe {
+function toRecipe(row: RecipeRow, recipeTags: string[] = []): Recipe {
   return {
     id: row.id,
     name: row.name,
@@ -67,6 +67,7 @@ function toRecipe(row: RecipeRow): Recipe {
     servings: row.servings,
     notes: row.notes,
     sourceLink: row.sourceLink,
+    tags: recipeTags,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -265,7 +266,26 @@ export function registerRecipesRoutes(app: FastifyInstance, db: Db): void {
       .where(and(...conditions))
       .orderBy(asc(recipes.createdAt));
 
-    const body = recipeListSchema.parse(rows.map(toRecipe));
+    // Batch-fetch all tags for the returned recipes in one query, then group
+    // by recipe id so each recipe gets its tag labels without N+1 queries.
+    const ids = rows.map((r) => r.id);
+    const listTagRows = ids.length > 0
+      ? await db
+          .select({ recipeId: recipeTags.recipeId, label: tags.label })
+          .from(recipeTags)
+          .innerJoin(tags, eq(recipeTags.tagId, tags.id))
+          .where(inArray(recipeTags.recipeId, ids))
+      : [];
+    const tagsByRecipe = new Map<string, string[]>();
+    for (const t of listTagRows) {
+      const list = tagsByRecipe.get(t.recipeId) ?? [];
+      list.push(t.label);
+      tagsByRecipe.set(t.recipeId, list);
+    }
+
+    const body = recipeListSchema.parse(
+      rows.map((r) => toRecipe(r, tagsByRecipe.get(r.id) ?? [])),
+    );
     return reply.code(200).send(body);
   });
 

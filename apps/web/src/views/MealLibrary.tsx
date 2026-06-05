@@ -523,12 +523,10 @@ export function MealLibrary(): JSX.Element {
                 >
                   <span className="recipe-row__name">{recipe.name}</span>
                   <span className="recipe-row__meta">
-                    {/* Sub-line: meal type · servings (CHANGE 2) */}
-                    <span className="recipe-row__sub">
-                      {recipe.mealType} &middot; {recipe.servings} serving{recipe.servings !== 1 ? 's' : ''}
-                    </span>
                     <span className="chip">{recipe.mealType}</span>
-                    <span className="recipe-row__servings">{recipe.servings} serving{recipe.servings !== 1 ? 's' : ''}</span>
+                    {recipe.tags.map((t) => (
+                      <span key={t} className="chip chip--tag">{t}</span>
+                    ))}
                     <span className="recipe-row__chevron" aria-hidden>{isExpanded ? '▲' : '▼'}</span>
                   </span>
                 </button>

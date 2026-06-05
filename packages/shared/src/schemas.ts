@@ -98,6 +98,7 @@ export const recipeSchema = z.object({
   servings: z.number().int().min(1),
   notes: z.string().nullable(),
   sourceLink: z.string().nullable(),
+  tags: z.array(z.string()),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
 }) satisfies z.ZodType<Recipe>;
