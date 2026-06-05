@@ -44,6 +44,8 @@ export interface EditorIngredientLine {
   ingredientId: string;
   name: string;
   quantity: number;
+  /** Raw text the user is typing; parsed to quantity at save time. */
+  quantityText?: string;
   unitCode: string;
   nutrition: Nutrition;
   referenceGrams: number;
@@ -74,7 +76,9 @@ export interface RecipeEditorProps {
 /** Map editor lines to the engine's NutritionLine shape for live recompute. */
 function toEngineLines(lines: EditorIngredientLine[]): NutritionLine[] {
   return lines.map((l) => ({
-    quantity: l.quantity,
+    quantity: l.quantityText !== undefined
+      ? (Number.parseFloat(l.quantityText) || l.quantity)
+      : l.quantity,
     unitCode: l.unitCode,
     ingredient: {
       id: l.ingredientId,
@@ -171,7 +175,7 @@ export function RecipeEditor({
 }: RecipeEditorProps): JSX.Element {
   const [name, setName] = useState(initialName);
   const [mealType, setMealType] = useState<MealType>(initialMealType);
-  const [servings, setServings] = useState(initialServings);
+  const [servingsText, setServingsText] = useState(String(initialServings));
   const [notes, setNotes] = useState(initialNotes);
   const [sourceLink, setSourceLink] = useState(initialSourceLink);
   const [selectedTags, setSelectedTags] = useState<string[]>(initialTags);
@@ -184,8 +188,11 @@ export function RecipeEditor({
   // the shared engine (AC-4.4). useMemo keeps it cheap but the source of truth
   // is always the engine, never a cached/rounded copy (S-6).
   const recipeNutrition = useMemo(
-    () => computeRecipeNutrition(toEngineLines(lines), Math.max(servings, 1)),
-    [lines, servings],
+    () => computeRecipeNutrition(
+      toEngineLines(lines),
+      Math.max(Number.parseInt(servingsText, 10) || 1, 1),
+    ),
+    [lines, servingsText],
   );
   const perServing = formatNutrition(recipeNutrition.perServing);
   const total = formatNutrition(recipeNutrition.total);
@@ -212,12 +219,14 @@ export function RecipeEditor({
     const candidate: RecipeInput = {
       name: name.trim(),
       mealType,
-      servings,
+      servings: Number.parseInt(servingsText, 10),
       notes: notes.trim() === '' ? null : notes.trim(),
       sourceLink: sourceLink.trim() === '' ? null : sourceLink.trim(),
       ingredients: lines.map((l) => ({
         ingredientId: l.ingredientId,
-        quantity: l.quantity,
+        quantity: l.quantityText !== undefined
+          ? Number.parseFloat(l.quantityText)
+          : l.quantity,
         unitCode: l.unitCode,
       })),
       tags: selectedTags,
@@ -295,11 +304,8 @@ export function RecipeEditor({
             type="number"
             min={1}
             step={1}
-            value={servings}
-            onChange={(e) => {
-              const next = Number.parseInt(e.target.value, 10);
-              setServings(Number.isNaN(next) ? 1 : next);
-            }}
+            value={servingsText}
+            onChange={(e) => setServingsText(e.target.value)}
           />
         </label>
 
@@ -346,13 +352,10 @@ export function RecipeEditor({
                       min={0}
                       step="any"
                       aria-label={`Quantity for ${line.name}`}
-                      value={line.quantity}
-                      onChange={(e) => {
-                        const next = Number.parseFloat(e.target.value);
-                        updateLine(line.key, {
-                          quantity: Number.isNaN(next) ? 0 : next,
-                        });
-                      }}
+                      value={line.quantityText ?? String(line.quantity)}
+                      onChange={(e) =>
+                        updateLine(line.key, { quantityText: e.target.value })
+                      }
                     />
                   </label>
                   <label>

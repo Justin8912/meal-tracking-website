@@ -200,7 +200,7 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
 
   const [selected, setSelected] = useState<UsdaSearchItem | null>(null);
   // Quantity and unit for the selected USDA food (AD-4). Defaults to 100g.
-  const [confirmQty, setConfirmQty] = useState(100);
+  const [confirmQty, setConfirmQty] = useState('100');
   const [confirmUnit, setConfirmUnit] = useState('g');
   const snapshot = useSnapshotUsdaIngredient();
 
@@ -208,7 +208,7 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
 
   function handleSelect(item: UsdaSearchItem): void {
     setSelected(item);
-    setConfirmQty(100);
+    setConfirmQty('100');
     setConfirmUnit('g');
   }
 
@@ -230,7 +230,9 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
       { fdcId: selected.fdcId },
       {
         onSuccess: (saved) => {
-          const [qty, unit] = resolveWeightUnit(confirmQty, confirmUnit);
+          const parsed = Number.parseFloat(confirmQty);
+          if (Number.isNaN(parsed) || parsed <= 0) return;
+          const [qty, unit] = resolveWeightUnit(parsed, confirmUnit);
           onAdd(lineFromSaved(saved, qty, unit));
           setSelected(null);
           setTerm('');
@@ -335,10 +337,7 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
                 min={0}
                 step="any"
                 value={confirmQty}
-                onChange={(e) => {
-                  const next = Number.parseFloat(e.target.value);
-                  setConfirmQty(Number.isNaN(next) ? 0 : next);
-                }}
+                onChange={(e) => setConfirmQty(e.target.value)}
                 onKeyDown={onEnter(confirmUsda)}
                 className="ingredient-picker__amount-input"
               />
