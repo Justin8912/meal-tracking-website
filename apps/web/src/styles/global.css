@@ -863,6 +863,87 @@ label {
   font-weight: 400;
 }
 
+/* Tag picker inside the recipe editor */
+.recipe-editor__field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.recipe-editor__field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.tag-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tag-picker__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-picker__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px 2px 10px;
+  font-size: 12px;
+  color: var(--dark);
+}
+
+.tag-picker__chip-remove {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--light);
+}
+
+.tag-picker__chip-remove:hover {
+  color: var(--protein);
+}
+
+.tag-picker__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.tag-picker__select {
+  flex: 1;
+  min-width: 120px;
+}
+
+.tag-picker__new {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  min-width: 140px;
+}
+
+.tag-picker__new-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.tag-picker__new-btn {
+  flex-shrink: 0;
+}
+
 .recipe-editor__ingredients {
   border: 1px solid var(--border);
   border-radius: var(--radius-control);

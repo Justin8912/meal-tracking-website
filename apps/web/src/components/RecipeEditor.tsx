@@ -12,6 +12,7 @@ import type {
 } from '@meal-tracking/shared';
 import { recipeInputSchema } from '@meal-tracking/shared';
 import { useSaveRecipe } from '../query/recipes.js';
+import { useTags } from '../query/tags.js';
 import { ApiError } from '../api/client.js';
 import { IngredientPicker, INGREDIENT_UNITS } from './IngredientPicker.js';
 import { MacroBar } from './MacroBar.js';
@@ -92,6 +93,102 @@ function nextLineKey(): string {
   return `line-${lineCounter}`;
 }
 
+function TagPicker({
+  selected,
+  onChange,
+}: {
+  selected: string[];
+  onChange: (tags: string[]) => void;
+}): JSX.Element {
+  const [newTag, setNewTag] = useState('');
+  const tagsQuery = useTags();
+  const workspaceTags = tagsQuery.data ?? [];
+  const available = workspaceTags.filter((t) => !selected.includes(t.label));
+
+  function addFromDropdown(label: string): void {
+    if (label && !selected.includes(label)) {
+      onChange([...selected, label]);
+    }
+  }
+
+  function addNew(): void {
+    const label = newTag.trim();
+    if (label && !selected.includes(label)) {
+      onChange([...selected, label]);
+    }
+    setNewTag('');
+  }
+
+  function remove(label: string): void {
+    onChange(selected.filter((t) => t !== label));
+  }
+
+  return (
+    <div className="tag-picker">
+      {selected.length > 0 ? (
+        <div className="tag-picker__chips">
+          {selected.map((label) => (
+            <span key={label} className="tag-picker__chip">
+              {label}
+              <button
+                type="button"
+                className="tag-picker__chip-remove"
+                aria-label={`Remove tag ${label}`}
+                onClick={() => remove(label)}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="tag-picker__controls">
+        {available.length > 0 ? (
+          <select
+            className="tag-picker__select"
+            value=""
+            aria-label="Add existing tag"
+            onChange={(e) => {
+              addFromDropdown(e.target.value);
+              e.target.value = '';
+            }}
+          >
+            <option value="" disabled>Add a tag…</option>
+            {available.map((t) => (
+              <option key={t.id} value={t.label}>{t.label}</option>
+            ))}
+          </select>
+        ) : null}
+
+        <div className="tag-picker__new">
+          <input
+            type="text"
+            className="tag-picker__new-input"
+            placeholder="New tag…"
+            value={newTag}
+            onChange={(e) => setNewTag(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addNew();
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="tag-picker__new-btn"
+            disabled={newTag.trim() === ''}
+            onClick={addNew}
+          >
+            Add
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function RecipeEditor({
   recipeId,
   initialName = '',
@@ -108,7 +205,7 @@ export function RecipeEditor({
   const [servings, setServings] = useState(initialServings);
   const [notes, setNotes] = useState(initialNotes);
   const [sourceLink, setSourceLink] = useState(initialSourceLink);
-  const [tagsText, setTagsText] = useState(initialTags.join(', '));
+  const [selectedTags, setSelectedTags] = useState<string[]>(initialTags);
   const [lines, setLines] = useState<EditorIngredientLine[]>(initialIngredients);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -154,10 +251,7 @@ export function RecipeEditor({
         quantity: l.quantity,
         unitCode: l.unitCode,
       })),
-      tags: tagsText
-        .split(',')
-        .map((t) => t.trim())
-        .filter((t) => t.length > 0),
+      tags: selectedTags,
     };
 
     // Validate against the shared Zod schema before the network call (S-3) so
@@ -249,14 +343,10 @@ export function RecipeEditor({
           />
         </label>
 
-        <label>
-          Tags (comma separated)
-          <input
-            type="text"
-            value={tagsText}
-            onChange={(e) => setTagsText(e.target.value)}
-          />
-        </label>
+        <div className="recipe-editor__field-group">
+          <span className="recipe-editor__field-label">Tags</span>
+          <TagPicker selected={selectedTags} onChange={setSelectedTags} />
+        </div>
 
         <label>
           Notes
