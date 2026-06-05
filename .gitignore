@@ -1,0 +1,31 @@
+
+# Spec-driven workflow session files (ephemeral)
+spec-driven/.sessions/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Environment / secrets (S-1)
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# OS / editor
+.DS_Store
+
+# Local Docker verification artifacts (sandbox proxy CA + auth) - never commit
+ca-bundle.verify.pem
+npmrc.verify
+Dockerfile.verify
+Dockerfile.web.verify
+docker-compose.verify.yml
+
+# Lockfile not tracked (deps installed where registry is reachable; not required by docker)
+package-lock.json

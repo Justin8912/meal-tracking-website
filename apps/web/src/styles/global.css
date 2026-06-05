@@ -1,0 +1,2548 @@
+/*
+ * Global stylesheet — faithful reproduction of the prototype's warm/cream theme
+ * (artifacts/food-tracker.jsx). The prototype rendered everything via inline
+ * style objects (the `C` palette, `font`/`heading`, `pill`, `inputStyle`,
+ * `btnPrimary`/`btnSecondary`, card/modal/tab helpers); this captures the same
+ * tokens, typography, spacing, radii and shadows as a real stylesheet so the
+ * production SPA (semantic markup + existing classNames) inherits that look.
+ *
+ * Imported ONCE from apps/web/src/main.tsx. Plain CSS — no framework, no Tailwind.
+ * Phone-first and responsive (NFR-2): two-column planner/edit layouts collapse
+ * to a single column below 768px.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+
+/* ── Screen-reader only utility (visually hidden but accessible) ─────────── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Design tokens (the prototype's `C` palette) ───────────────────────────── */
+:root {
+  --bg: #f5f1eb;
+  --card: #fff;
+  --card-alt: #faf8f4;
+  --chip-bg: #ede8df;
+  --dark: #3a3428;
+  --med: #5c5549;
+  --muted: #7a7264;
+  --light: #a09888;
+  --border: #e8e2d8;
+  --border-light: #ddd8ce;
+  --protein: #c47a5a;
+  --carbs: #d4a96a;
+  --fat: #8aab7f;
+  --fiber: #7a9eb5;
+  --danger: #c45a5a;
+  --success: #6a9e5a;
+
+  --radius-card: 8px;
+  --radius-modal: 12px;
+  --radius-control: 8px;
+  --shadow-card: 0 2px 20px rgba(58, 52, 40, 0.06);
+  --shadow-pop: 0 8px 24px rgba(58, 52, 40, 0.12);
+  --font-body: 'DM Sans', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Playfair Display', Georgia, serif;
+  --max-width: 1200px;
+}
+
+/* ── Reset / base ──────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--dark);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-heading);
+  color: var(--dark);
+  font-weight: 600;
+  margin: 0 0 0.5em;
+}
+
+h1 {
+  font-size: 22px;
+}
+h2 {
+  font-size: 18px;
+  font-weight: 500;
+}
+h3 {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+a {
+  color: var(--protein);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* ── App shell (router.tsx AppLayout) ──────────────────────────────────────── */
+.app-shell {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.app-header {
+  background: linear-gradient(135deg, #3a3428 0%, #5c5549 100%);
+  padding: 28px 40px 0;
+}
+
+.app-header__inner {
+  max-width: var(--max-width);
+  margin: 0 auto;
+}
+
+/* Brand on the left, the recipe-count meta slot on the right (prototype header). */
+.app-header__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.app-header__brand {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.app-header__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-header__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fat);
+  flex-shrink: 0;
+}
+
+.app-header__count {
+  font-size: 12px;
+  color: var(--light);
+}
+
+.app-header__title {
+  font-family: var(--font-heading);
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--bg);
+  letter-spacing: 0.01em;
+}
+
+.app-header__tagline {
+  font-size: 11px;
+  color: var(--light);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+/* The two tabs (Meal Library / Weekly Planner) as the prototype's tab strip. */
+.app-nav {
+  display: flex;
+  gap: 0;
+}
+
+.app-nav__tab {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--light);
+  letter-spacing: 0.04em;
+  padding: 12px 28px;
+  border: none;
+  cursor: pointer;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  text-decoration: none;
+  transition: all 0.25s;
+  position: relative;
+  bottom: -1px;
+}
+
+.app-nav__tab:hover {
+  color: var(--bg);
+  text-decoration: none;
+}
+
+.app-nav__tab.is-active {
+  color: var(--dark);
+  background: var(--bg);
+}
+
+.app-main {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 40px 60px;
+}
+
+@media (max-width: 600px) {
+  .app-header {
+    padding: 24px 16px 0;
+  }
+  .app-main {
+    padding: 0 16px 40px;
+  }
+  .app-nav__tab {
+    padding: 12px 18px;
+  }
+}
+
+/* A shared "panel" surface that mirrors the prototype's card with the tab notch
+   (the top-left corner is square so it tucks under the active tab). */
+.panel {
+  background: var(--card);
+  border-radius: 0 var(--radius-card) var(--radius-card) var(--radius-card);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+/* ── Reusable controls ─────────────────────────────────────────────────────── */
+.btn,
+button {
+  font-family: var(--font-body);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1.5px solid var(--border-light);
+  background: transparent;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+.btn--primary {
+  background: var(--dark);
+  color: #fff;
+  border: none;
+  font-weight: 600;
+}
+.btn--primary:hover {
+  background: var(--med);
+}
+
+.btn--secondary {
+  background: transparent;
+  border: 1.5px solid var(--border-light);
+  color: var(--muted);
+}
+.btn--secondary:hover {
+  border-color: var(--light);
+}
+
+.btn--danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Inputs / selects / textareas (the prototype's inputStyle). */
+input,
+select,
+textarea {
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 8px 12px;
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-control);
+  outline: none;
+  background: var(--card-alt);
+  color: var(--dark);
+  width: 100%;
+  transition: border 0.2s;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--light);
+}
+
+select {
+  cursor: pointer;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 64px;
+}
+
+/* Form labels in the prototype: small uppercase caption above a full-width field. */
+label {
+  display: block;
+  font-size: 13px;
+  color: var(--med);
+}
+
+/* Filter pills (the prototype's `pill`). */
+.pill {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  padding: 6px 16px;
+  border: 1.5px solid var(--border-light);
+  border-radius: 24px;
+  cursor: pointer;
+  text-transform: capitalize;
+  background: transparent;
+  transition: all 0.2s;
+}
+
+.pill--active {
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--dark);
+  border-color: var(--dark);
+}
+
+/* Chips / badges (the prototype's TagChip). */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--med);
+  background: var(--chip-bg);
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+/* Section caption: small uppercase muted label used throughout the prototype. */
+.caption {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ── Meal Library view ─────────────────────────────────────────────────────── */
+/* The view sits inside the white .panel card, so its chrome is the card's
+   internal toolbar + list rows rather than its own surface. */
+.meal-library {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The library heading + Add-recipe toggle form the card's top toolbar. */
+.meal-library > h1 {
+  margin: 0;
+  padding: 18px 24px 0;
+  font-size: 22px;
+}
+
+.meal-library > button[aria-expanded] {
+  align-self: flex-start;
+  margin: 12px 24px 0;
+}
+
+/* ── CHANGE 3: Prototype-style pill filter toolbar ─────────────────────────── */
+/* The toolbar replaces the plain select dropdowns with horizontal pill buttons.
+   Pills left, search+Add right. The backing <select> elements stay sr-only. */
+.meal-library__toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.meal-library__pills {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.meal-library__pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.meal-library__manage-tags-btn {
+  font-size: 11px;
+  color: var(--light);
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.meal-library__manage-tags-btn:hover {
+  color: var(--med);
+}
+
+.tag-manager {
+  background: var(--card-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 10px 12px;
+}
+
+.tag-manager__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tag-manager__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.tag-manager__label {
+  flex: 1;
+  color: var(--dark);
+}
+
+.tag-manager__delete-btn {
+  font-size: 11px;
+  color: var(--light);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.tag-manager__delete-btn:hover {
+  color: var(--protein);
+  border-color: var(--protein);
+}
+
+.tag-manager__confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tag-manager__confirm-text {
+  font-size: 11px;
+  color: var(--med);
+}
+
+.tag-manager__confirm-yes {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--protein);
+  border: none;
+  border-radius: var(--radius-control);
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.tag-manager__confirm-yes:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tag-manager__confirm-cancel {
+  font-size: 11px;
+  color: var(--light);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+/* Tag pills use the fat (green) accent when active. */
+.pill--tag-active {
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--fat);
+  border-color: var(--fat);
+}
+
+.meal-library__toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.meal-library__search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.meal-library__search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--light);
+  pointer-events: none;
+}
+
+.meal-library__search-input {
+  width: 180px;
+  padding-left: 32px;
+}
+
+/* ── Sub-line on collapsed recipe rows (CHANGE 2) ───────────────────────────── */
+.recipe-row__sub {
+  font-size: 12px;
+  color: var(--light);
+  text-transform: capitalize;
+}
+
+/* ── Ingredient chips in expanded row (CHANGE 2) ────────────────────────────── */
+.recipe-row__ingredient-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.recipe-row__ingredient-chip {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 16px;
+}
+
+/* ── Ingredient nutrition table ─────────────────────────────────────────────── */
+.recipe-row__ingredient-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 4px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+}
+
+.recipe-row__ingredient-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-family: var(--font-body);
+}
+
+.recipe-row__ingredient-table th {
+  background: var(--card-alt);
+  color: var(--light);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-body);
+}
+
+.recipe-row__ingredient-table th:not(:first-child) {
+  text-align: right;
+}
+
+.recipe-row__ingredient-table td {
+  padding: 7px 12px;
+  color: var(--med);
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: middle;
+}
+
+.recipe-row__ingredient-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.recipe-row__ingredient-table tbody tr:hover td {
+  background: var(--card-alt);
+}
+
+/* Numeric columns — right-aligned, monospace-like weight */
+.recipe-row__td-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--dark);
+}
+
+/* Macro column accent colours matching the prototype */
+.recipe-row__td-protein { color: var(--protein); }
+.recipe-row__td-carbs   { color: var(--carbs); }
+.recipe-row__td-fat     { color: var(--fat); }
+
+/* Footer total row */
+.recipe-row__tfoot-total td {
+  background: var(--card-alt);
+  border-top: 1px solid var(--border);
+  border-bottom: none;
+  font-weight: 600;
+  color: var(--dark);
+  font-size: 12px;
+  padding: 8px 12px;
+}
+
+/* ── Macro bars in recipe row detail (CHANGE 2) ─────────────────────────────── */
+.recipe-row__macro-bars {
+  margin-bottom: 12px;
+}
+
+.recipe-row__macro-bars .macro-bars {
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.recipe-row__kcal {
+  font-size: 11px;
+  color: var(--light);
+  margin: 6px 0 0;
+}
+
+/* ── Legacy filter div (kept for compatibility, now hidden) ────────────────── */
+.meal-library__filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.meal-library__filters label {
+  flex: 1;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.meal-library__filters input,
+.meal-library__filters select {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+}
+
+/* Loading/empty/error copy inside the library gets generous, centered padding. */
+.meal-library > p {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--light);
+  margin: 0;
+}
+
+/* ── Recipe list rows (expandable, prototype-style) ───────────────────────── */
+.recipe-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.recipe-row {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.2s;
+}
+
+.recipe-row:last-child {
+  border-bottom: none;
+}
+
+.recipe-row--expanded {
+  background: var(--card-alt);
+}
+
+/* The clickable header row: name on the left, meta (meal-type chip, servings,
+   chevron) on the right. Mimics the prototype's list row layout. */
+.recipe-row__header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 24px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.recipe-row__header:hover {
+  background: var(--card-alt);
+}
+
+.recipe-row__name {
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--dark);
+}
+
+.recipe-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.recipe-row__servings {
+  font-size: 11px;
+  color: var(--light);
+}
+
+.recipe-row__chevron {
+  font-size: 10px;
+  color: var(--light);
+}
+
+/* Expanded detail panel inside a row */
+.recipe-row__detail {
+  padding: 4px 24px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recipe-row__section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 4px;
+}
+
+.recipe-row__ingredients ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recipe-row__ingredients li {
+  font-size: 13px;
+  color: var(--med);
+}
+
+.recipe-row__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.recipe-row__notes p {
+  font-size: 13px;
+  color: var(--med);
+  background: var(--card-alt);
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--chip-bg);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.recipe-row__link a {
+  font-size: 13px;
+  color: var(--med);
+  text-decoration: underline;
+}
+
+.recipe-row__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Status / error / empty messaging. */
+[role='status'] {
+  color: var(--muted);
+  font-style: italic;
+}
+
+[role='alert'] {
+  color: var(--danger);
+  background: rgba(196, 90, 90, 0.08);
+  border: 1px solid rgba(196, 90, 90, 0.25);
+  border-radius: var(--radius-control);
+  padding: 10px 14px;
+}
+
+/* ── Recipe editor (recipe-editor__*) ──────────────────────────────────────── */
+.recipe-editor {
+  background: var(--card-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 24px;
+  margin: 12px 24px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.recipe-editor__draft-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(212, 169, 106, 0.12);
+  border: 1px solid rgba(212, 169, 106, 0.4);
+  border-radius: var(--radius-control);
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--med);
+  margin-bottom: 12px;
+}
+
+.recipe-editor__draft-discard {
+  font-size: 11px;
+  color: var(--light);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.recipe-editor__draft-discard:hover {
+  color: var(--protein);
+}
+
+.recipe-editor__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 16px;
+}
+
+.recipe-editor__fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.recipe-editor__fields input,
+.recipe-editor__fields select,
+.recipe-editor__fields textarea {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+}
+
+/* Tag picker inside the recipe editor */
+.recipe-editor__field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.recipe-editor__field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.tag-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tag-picker__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-picker__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px 2px 10px;
+  font-size: 12px;
+  color: var(--dark);
+}
+
+.tag-picker__chip-remove {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--light);
+}
+
+.tag-picker__chip-remove:hover {
+  color: var(--protein);
+}
+
+.tag-picker__select {
+  width: 100%;
+}
+
+.tag-picker__empty-hint {
+  font-size: 12px;
+  color: var(--light);
+  margin: 0;
+}
+
+.tag-manager__add-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.tag-manager__add-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.tag-manager__add-btn {
+  flex-shrink: 0;
+}
+
+.tag-manager__error {
+  font-size: 12px;
+  color: var(--danger);
+  margin: 4px 0 0;
+}
+
+.recipe-editor__ingredients {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 16px;
+  margin: 0;
+  background: var(--card-alt);
+}
+
+.recipe-editor__ingredients legend {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0 6px;
+}
+
+.recipe-editor__ingredients > ul {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recipe-editor__ingredients > ul > li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--chip-bg);
+  border-radius: var(--radius-control);
+}
+
+.recipe-editor__ingredients > ul > li > span:first-child {
+  flex: 1;
+  min-width: 120px;
+  font-weight: 500;
+}
+
+.recipe-editor__ingredients > ul > li label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--light);
+}
+
+.recipe-editor__ingredients > ul > li input {
+  width: 84px;
+  text-align: center;
+}
+
+.recipe-editor__line-incomplete {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--danger);
+  background: rgba(196, 90, 90, 0.1);
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+/* The dark "nutrition per serving" panel (the prototype's dark card). */
+.recipe-editor__nutrition {
+  background: var(--dark);
+  border-radius: var(--radius-control);
+  padding: 18px 20px;
+  color: #fff;
+}
+
+.recipe-editor__nutrition h3 {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 12px;
+  font-family: var(--font-body);
+}
+
+.recipe-editor__nutrition dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px 28px;
+  margin: 0;
+}
+
+.recipe-editor__nutrition dl > div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+}
+
+.recipe-editor__nutrition dt {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: lowercase;
+}
+
+.recipe-editor__nutrition dd {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+/* Macro colors on the nutrition values, mirroring the prototype's per-macro hues. */
+.recipe-editor__nutrition dl > div:nth-child(1) dd {
+  color: var(--bg);
+}
+.recipe-editor__nutrition dl > div:nth-child(2) dd {
+  color: var(--protein);
+}
+.recipe-editor__nutrition dl > div:nth-child(3) dd {
+  color: var(--carbs);
+}
+.recipe-editor__nutrition dl > div:nth-child(4) dd {
+  color: var(--fat);
+}
+.recipe-editor__nutrition dl > div:nth-child(5) dd {
+  color: var(--fiber);
+}
+
+.recipe-editor__incomplete {
+  color: var(--carbs);
+  background: rgba(212, 169, 106, 0.15);
+  border-radius: var(--radius-control);
+  padding: 8px 12px;
+  font-size: 12px;
+  margin: 0 0 12px;
+}
+
+.recipe-editor__total {
+  font-size: 13px;
+  color: var(--med);
+}
+.recipe-editor__total h3 {
+  margin-bottom: 4px;
+}
+
+.recipe-editor > button[type='submit'] {
+  align-self: flex-start;
+}
+.recipe-editor > button[type='submit'] {
+  background: var(--dark);
+  color: #fff;
+  border: none;
+  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+/* ── Ingredient picker ─────────────────────────────────────────────────────── */
+.ingredient-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ingredient-picker > label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ingredient-picker [aria-label='Search results'] {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--card);
+  box-shadow: var(--shadow-pop);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.ingredient-picker [aria-label='Search results'] > li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--chip-bg);
+  font-size: 13px;
+}
+
+.ingredient-picker [aria-label='Search results'] > li:last-child {
+  border-bottom: none;
+}
+
+.ingredient-picker [aria-label='Search results'] > li > span:first-child {
+  flex: 1;
+  font-weight: 500;
+}
+
+.ingredient-picker [aria-label='Search results'] > li > span:nth-child(2) {
+  font-size: 11px;
+  color: var(--light);
+  text-transform: capitalize;
+}
+
+/* USDA result name + macro summary stacked vertically */
+.ingredient-picker__result-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ingredient-picker__result-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dark);
+  word-break: break-word;
+}
+
+.ingredient-picker__result-meta {
+  font-size: 11px;
+  color: var(--light);
+}
+
+.ingredient-picker [aria-label='Search results'] button {
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 4px 12px;
+  background: var(--dark);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.ingredient-picker__confirm,
+.ingredient-picker__custom {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: var(--card-alt);
+  border: 1px solid var(--chip-bg);
+  border-radius: var(--radius-control);
+}
+
+.ingredient-picker__confirm {
+  flex-direction: column;
+}
+
+/* Amount + unit side-by-side row inside the confirm panel */
+.ingredient-picker__amount-row,
+.ingredient-picker__serving-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.ingredient-picker__amount-input {
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.ingredient-picker__unit-select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Saved ingredient confirm row (quantity + unit inline) */
+.ingredient-picker__saved-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--card-alt);
+  border-radius: var(--radius-control);
+}
+
+.ingredient-picker__saved-confirm-name {
+  flex: 1 1 100%;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--med);
+}
+
+.ingredient-picker__custom label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ingredient-picker__custom input {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+}
+
+/* 2-column grid for the compact nutrition + serving-size fields */
+.ingredient-picker__custom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* Section sub-heading inside the custom form */
+.ingredient-picker__custom-section {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 4px 0 0;
+}
+
+/* Toggle button for the optional volume-conversions section */
+.ingredient-picker__toggle-volume {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: left;
+  width: auto;
+}
+
+/* Volume conversions grid: 2 columns of unit→grams inputs */
+.ingredient-picker__volume-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: var(--card);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-light);
+}
+
+/* Delete confirm inline row for saved custom ingredients */
+.ingredient-picker__delete-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--danger);
+  margin-left: 6px;
+}
+
+.ingredient-picker__delete-confirm button {
+  font-size: 11px;
+  padding: 2px 8px;
+  width: auto;
+}
+
+.ingredient-picker__delete-yes {
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Inline error shown when delete is rejected (e.g., ingredient in use) */
+.ingredient-picker__delete-error {
+  color: var(--danger);
+  font-size: 10px;
+  flex: 1 1 100%;
+  margin-top: 2px;
+}
+
+/* Small delete × button next to custom saved ingredients */
+.ingredient-picker__delete-btn {
+  background: none;
+  border: none;
+  padding: 0 4px;
+  font-size: 14px;
+  color: var(--light);
+  cursor: pointer;
+  line-height: 1;
+  width: auto;
+  margin-left: 4px;
+}
+.ingredient-picker__delete-btn:hover {
+  color: var(--danger);
+}
+
+/* ── Weekly planner view ───────────────────────────────────────────────────── */
+/* The view sits inside the white .panel card; its sections get internal padding
+   and dividers rather than their own surfaces. */
+[aria-labelledby='weekly-planner-heading'],
+.weekly-planner-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 24px 24px;
+}
+
+[aria-labelledby='weekly-planner-heading'] > h1,
+.weekly-planner-section > h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+/* The "Edit plan / Done editing" toggle reads as a primary action button. */
+[aria-labelledby='weekly-planner-heading'] > button[aria-pressed],
+.weekly-planner-section > button[aria-pressed] {
+  align-self: flex-start;
+  width: auto;
+  padding: 10px 20px;
+  background: var(--dark);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+[aria-labelledby='weekly-planner-heading'] > button[aria-pressed='true'],
+.weekly-planner-section > button[aria-pressed='true'] {
+  background: var(--med);
+}
+
+/* ── CHANGE 1: Prototype-style week nav bar ─────────────────────────────────── */
+/* Circular icon-buttons + centered date range + "Edit plan" pill on the right.  */
+.week-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--card-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 12px 16px;
+}
+
+.week-nav__arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-light);
+  background: transparent;
+  color: var(--med);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: border-color 0.2s;
+}
+.week-nav__arrow:hover {
+  border-color: var(--light);
+}
+
+.week-nav__center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  text-align: center;
+}
+
+.week-nav__range {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--dark);
+}
+
+.week-nav__label {
+  font-size: 12px;
+  color: var(--light);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.week-nav__today {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: 1.5px solid var(--border-light);
+  border-radius: 20px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.week-nav__today:hover {
+  border-color: var(--light);
+}
+
+.week-nav__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.week-nav__edit {
+  font-size: 11px;
+  padding: 6px 14px;
+}
+
+/* Week prev/next navigation — legacy selector for test compatibility. */
+[aria-label='Week navigation'] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--card-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 14px 20px;
+}
+
+[aria-label='Week navigation'] p {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 500;
+  margin: 0;
+  text-align: center;
+}
+
+[aria-label='Week navigation'] button {
+  width: auto;
+  padding: 6px 14px;
+  background: transparent;
+  border: 1.5px solid var(--border-light);
+  border-radius: 20px;
+  color: var(--med);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+[aria-label='Week navigation'] button:hover {
+  border-color: var(--light);
+}
+
+/* ── CHANGE 1: Prototype slot × day matrix grid ─────────────────────────────── */
+/* Rows: breakfast / lunch / dinner. Columns: 70px label + 7 day columns.
+   Matching the prototype's normal-view planner grid exactly. */
+.planner-grid {
+  display: grid;
+  grid-template-columns: 70px repeat(7, 1fr);
+  gap: 8px;
+  padding: 12px 0 8px;
+}
+
+.planner-grid__corner {
+  /* Top-left empty cell */
+}
+
+.planner-grid__day-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 4px;
+  gap: 2px;
+}
+
+.planner-grid__day-abbr {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.planner-grid__day-num {
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--dark);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.planner-grid__day-num--today {
+  background: var(--dark);
+  color: var(--bg);
+}
+
+.planner-grid__slot-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 0;
+}
+
+.planner-grid__slot-text {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  writing-mode: vertical-lr;
+  transform: rotate(180deg);
+}
+
+.planner-grid__cell {
+  background: var(--card-alt);
+  border-radius: var(--radius-control);
+  padding: 8px;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.planner-grid__cell-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--light);
+  opacity: 0.5;
+}
+
+/* Meal card: a small container with the name + a remove × in the top-right. */
+.planner-grid__meal-card {
+  position: relative;
+  background: var(--card);
+  border-radius: 6px;
+  padding: 5px 20px 5px 6px; /* right padding makes room for the × button */
+  transition: transform 0.2s, box-shadow 0.2s;
+  margin-bottom: 3px;
+}
+.planner-grid__meal-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(58, 52, 40, 0.08);
+}
+/* The clickable card shows the name via ::before (data-label attr) so the text
+   is not a DOM text node and findByText won't find it twice. */
+.planner-grid__meal-card::before {
+  content: attr(data-label);
+  display: block;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--dark);
+  word-break: break-word;
+  line-height: 1.3;
+  padding-right: 14px; /* leave space for the × button */
+}
+/* × remove button in the top-right corner of the meal card. */
+.planner-grid__meal-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  background: none;
+  border: none;
+  padding: 0;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--light);
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background 0.15s, color 0.15s;
+}
+.planner-grid__meal-remove:hover {
+  background: rgba(196, 90, 90, 0.12);
+  color: var(--danger);
+}
+
+/* The overlay when a meal card is clicked (grid detail). */
+.planner-grid__detail-overlay {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 16px;
+  box-shadow: var(--shadow-pop);
+  position: relative;
+}
+
+.planner-grid__detail-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  border: 1.5px solid var(--border-light);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/* The hidden day-cell list (accessible but visually off-screen). */
+.weekly-planner__week--hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The Mon–Sun week grid: 7 columns on desktop, stacked on phones (NFR-2). */
+.weekly-planner__week {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+@media (min-width: 768px) {
+  .weekly-planner__week {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 8px;
+  }
+}
+
+.weekly-planner__day {
+  background: var(--card-alt);
+  border: 1px solid var(--chip-bg);
+  border-radius: var(--radius-control);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 90px;
+}
+
+.weekly-planner__day h2 {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0;
+}
+
+.weekly-planner__day > ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.weekly-planner__day > ul > li {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+}
+
+/* Row 1: meal title (takes full width so it never overlaps controls). */
+.weekly-planner__day > ul > li > button:first-child {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--dark);
+  word-break: break-word;
+}
+
+/* Row 2: slot badge + action buttons on a single flex row. */
+.weekly-planner__day > ul > li > .meal-entry__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.weekly-planner__day > ul > li > span {
+  font-size: 10px;
+  color: var(--light);
+  text-transform: capitalize;
+}
+
+/* The small inline edit/remove/add controls in a day cell. */
+.weekly-planner__day > ul > li > button:not(:first-child),
+.weekly-planner__day > button {
+  font-size: 10px;
+  padding: 3px 8px;
+  width: auto;
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.weekly-planner__day > button {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.weekly-planner__empty {
+  color: var(--light);
+  opacity: 0.7;
+  text-align: center;
+  font-size: 11px;
+  margin: 6px 0;
+}
+
+/* The inline add/edit meal forms inside a day cell. */
+.weekly-planner__day form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+
+.weekly-planner__day form label {
+  font-size: 10px;
+  color: var(--med);
+}
+
+.weekly-planner__day form button {
+  width: auto;
+}
+
+.weekly-planner__error {
+  background: var(--card);
+  border: 1px solid rgba(196, 90, 90, 0.25);
+  border-radius: var(--radius-card);
+  padding: 20px;
+}
+.weekly-planner__error button {
+  width: auto;
+  margin-top: 8px;
+}
+
+/* ── Edit mode: two-panel layout (palette LEFT, week RIGHT) ─────────────────── */
+/* Note: WeekGrid.tsx also injects a scoped <style> for .weekly-planner__edit-layout
+   (the mobile-first single column + the >=768px two-column split that the
+   responsive test asserts). These rules add the visual treatment only. */
+.weekly-planner__edit-layout {
+  margin-top: 4px;
+}
+
+.weekly-planner__palette {
+  background: var(--card-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 16px;
+}
+
+.weekly-planner__palette h2 {
+  margin-top: 0;
+}
+
+.weekly-planner__palette-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.weekly-planner__palette-filters label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.weekly-planner__palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Palette recipe cards read as draggable cards (grab affordance). */
+.weekly-planner__palette-list > li > button {
+  width: 100%;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--chip-bg);
+  border-radius: var(--radius-control);
+  padding: 10px 12px;
+  cursor: grab;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dark);
+  transition: border-color 0.15s;
+}
+.weekly-planner__palette-list > li > button:hover {
+  border-color: var(--light);
+}
+.weekly-planner__palette-list > li > button:active {
+  cursor: grabbing;
+}
+.weekly-planner__palette-list > li > button[aria-pressed='true'] {
+  border-color: var(--fat);
+  background: rgba(138, 171, 127, 0.12);
+}
+.weekly-planner__palette-list > li > button > span:last-child {
+  color: var(--light);
+  font-weight: 400;
+  text-transform: capitalize;
+}
+
+/* The day/slot droppable targets in edit mode. */
+.weekly-planner__edit-layout .weekly-planner__day > ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.weekly-planner__edit-layout .weekly-planner__day > ul > li > button:first-child {
+  width: 100%;
+  text-align: left;
+  background: var(--card);
+  border: 1px dashed var(--border-light);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: capitalize;
+  cursor: pointer;
+}
+.weekly-planner__edit-layout
+  .weekly-planner__day
+  > ul
+  > li
+  > button[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.7;
+}
+.weekly-planner__edit-layout .weekly-planner__day > ul > li > ul {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.weekly-planner__edit-layout .weekly-planner__day > ul > li > ul > li {
+  background: var(--chip-bg);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 10px;
+  color: var(--med);
+}
+
+/* ── Weekly nutrition summary ──────────────────────────────────────────────── */
+.weekly-nutrition-summary {
+  background: var(--card-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 16px 20px;
+}
+
+.weekly-nutrition-summary h2 {
+  margin-top: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: var(--font-body);
+}
+
+.weekly-nutrition-summary dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px 28px;
+  margin: 0;
+}
+
+.weekly-nutrition-summary dl > div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+}
+
+.weekly-nutrition-summary dt {
+  font-size: 10px;
+  color: var(--light);
+  text-transform: lowercase;
+}
+
+.weekly-nutrition-summary dd {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.weekly-nutrition-summary dl > div:nth-child(1) dd {
+  color: var(--dark);
+}
+.weekly-nutrition-summary dl > div:nth-child(2) dd {
+  color: var(--protein);
+}
+.weekly-nutrition-summary dl > div:nth-child(3) dd {
+  color: var(--carbs);
+}
+.weekly-nutrition-summary dl > div:nth-child(4) dd {
+  color: var(--fat);
+}
+.weekly-nutrition-summary dl > div:nth-child(5) dd {
+  color: var(--fiber);
+}
+
+.weekly-nutrition-summary__excluded {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--chip-bg);
+  border-radius: var(--radius-control);
+  padding: 10px 12px;
+}
+
+/* ── Average + macro pills ─────────────────────────────────────────────────── */
+.weekly-nutrition-summary__avg {
+  margin-bottom: 16px;
+}
+
+.weekly-nutrition-summary__avg-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.weekly-nutrition-summary__avg-sub {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 10px;
+  color: var(--light);
+}
+
+.weekly-nutrition-summary__avg-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Generic pill; variant classes add accent colour */
+.nutrition-pill {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--chip-bg);
+  color: var(--med);
+}
+
+.nutrition-pill--cal     { background: rgba(58,52,40,0.08); color: var(--dark); }
+.nutrition-pill--protein { background: rgba(196,122,90,0.12); color: var(--protein); }
+.nutrition-pill--carbs   { background: rgba(212,169,106,0.12); color: var(--carbs); }
+.nutrition-pill--fat     { background: rgba(138,171,127,0.12); color: var(--fat); }
+.nutrition-pill--fiber   { background: rgba(122,158,181,0.12); color: var(--fiber); }
+
+/* ── Day-by-day tab view ───────────────────────────────────────────────────── */
+.day-nutrition {}
+
+.day-nutrition__tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+}
+
+.day-nutrition__tab {
+  position: relative;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 7px 10px 6px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--light);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.day-nutrition__tab:hover {
+  color: var(--muted);
+}
+
+.day-nutrition__tab--active {
+  color: var(--dark);
+  border-bottom-color: var(--dark);
+  font-weight: 600;
+}
+
+/* Small dot indicating the day has meals */
+.day-nutrition__tab-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--fat);
+  flex-shrink: 0;
+}
+
+.day-nutrition__tab--active .day-nutrition__tab-dot {
+  background: var(--dark);
+}
+
+.day-nutrition__panel {
+  padding: 12px 2px 0;
+}
+
+.day-nutrition__day-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dark);
+  margin: 0 0 10px;
+  font-family: var(--font-body);
+}
+
+/* Day total pills */
+.day-nutrition__totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+/* Meal list inside a day tab */
+.day-nutrition__meals {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.day-nutrition__meal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-control);
+  font-size: 12px;
+}
+
+.day-nutrition__meal--excluded {
+  opacity: 0.65;
+}
+
+.day-nutrition__meal-name {
+  flex: 1;
+  font-weight: 500;
+  color: var(--dark);
+  word-break: break-word;
+}
+
+.day-nutrition__meal-slot {
+  font-size: 10px;
+  color: var(--light);
+  text-transform: capitalize;
+  flex-shrink: 0;
+}
+
+.day-nutrition__meal-badge {
+  font-size: 10px;
+  color: var(--light);
+  background: var(--chip-bg);
+  padding: 2px 7px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.day-nutrition__empty {
+  font-size: 12px;
+  color: var(--light);
+  margin: 8px 0;
+}
+
+/* ── Planned-meal detail panel ─────────────────────────────────────────────── */
+.planned-meal-detail {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-pop);
+  padding: 16px;
+  margin-top: 6px;
+}
+
+.planned-meal-detail h3 {
+  font-size: 18px;
+  margin: 0 0 4px;
+}
+
+.planned-meal-detail__slot {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 8px;
+}
+
+.planned-meal-detail__notes {
+  font-size: 13px;
+  color: var(--med);
+  line-height: 1.6;
+  background: var(--card-alt);
+  border-radius: var(--radius-control);
+  padding: 12px;
+}
+
+.planned-meal-detail__incomplete {
+  color: var(--carbs);
+  background: rgba(212, 169, 106, 0.15);
+  border-radius: var(--radius-control);
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.planned-meal-detail__ingredients-section h4 {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 12px 0 6px;
+}
+
+.planned-meal-detail__ingredients {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.planned-meal-detail__ingredients > li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.planned-meal-detail__ing-qty {
+  font-variant-numeric: tabular-nums;
+  color: var(--med);
+  white-space: nowrap;
+  min-width: 60px;
+}
+
+.planned-meal-detail__ing-name {
+  color: var(--dark);
+}
+
+.planned-meal-detail__tombstone {
+  color: var(--muted);
+  font-style: italic;
+  background: var(--card-alt);
+  border: 1px dashed var(--border-light);
+  border-radius: var(--radius-control);
+  padding: 12px;
+}
+
+.planned-meal-detail dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin: 8px 0 0;
+}
+.planned-meal-detail dl > div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+}
+.planned-meal-detail dt {
+  font-size: 10px;
+  color: var(--light);
+  text-transform: lowercase;
+}
+.planned-meal-detail dd {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--med);
+}
+
+/* ── MacroBar (components/MacroBar.tsx) ────────────────────────────────────── */
+/* A <dl class="macro-bars"> of MacroBar rows. Each row is a <div class="macro-bar">
+   holding the <dt> label, the <dd> value, and a thin colored track. Used in the
+   RecipeEditor nutrition panel, the PlannedMealDetail, and the WeeklyNutritionSummary
+   (the prototype's MacroBar). The per-component column-reverse <dl> rules above are
+   superseded for these macro lists by the higher-specificity selectors here. */
+.macro-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+}
+
+.recipe-editor__nutrition dl.macro-bars,
+.weekly-nutrition-summary dl.macro-bars,
+.planned-meal-detail dl.macro-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.macro-bars > .macro-bar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+.macro-bars > .macro-bar > .macro-bar__label {
+  grid-column: 1;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.macro-bars > .macro-bar > .macro-bar__value {
+  grid-column: 2;
+  margin: 0;
+  justify-self: end;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.macro-bars > .macro-bar > .macro-bar__track {
+  grid-column: 1 / -1;
+  height: 6px;
+  background: var(--chip-bg);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.macro-bars > .macro-bar > .macro-bar__track > .macro-bar__fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Per-macro fill colors (prototype hues). */
+.macro-bar__track--calories > .macro-bar__fill {
+  background: var(--med);
+}
+.macro-bar__track--protein > .macro-bar__fill {
+  background: var(--protein);
+}
+.macro-bar__track--carbs > .macro-bar__fill {
+  background: var(--carbs);
+}
+.macro-bar__track--fat > .macro-bar__fill {
+  background: var(--fat);
+}
+.macro-bar__track--fiber > .macro-bar__fill {
+  background: var(--fiber);
+}
+
+/* On the dark "per serving" nutrition panel the labels/values read on dark. */
+.recipe-editor__nutrition .macro-bar__label {
+  color: rgba(255, 255, 255, 0.55);
+}
+.recipe-editor__nutrition .macro-bar__value {
+  color: #fff;
+}
+.recipe-editor__nutrition .macro-bar__track {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* On the light summary/detail surfaces the labels are muted, values dark. */
+.weekly-nutrition-summary .macro-bar__label,
+.planned-meal-detail .macro-bar__label {
+  color: var(--light);
+}
+.weekly-nutrition-summary .macro-bar__value,
+.planned-meal-detail .macro-bar__value {
+  color: var(--med);
+}
+
+/* ── Empty / loading / error treatment (EmptyState, prototype ~168) ────────── */
+/* The prototype centered empty/loading/error blocks with a Playfair title in a
+   muted tone over a smaller light subtitle, with a typographic glyph (NOT an
+   emoji, S-7) above. The bare <p role="status|alert"> messages keep their text
+   (the tests assert it) but render in this centered, generous treatment. */
+.meal-library > p[role='status'],
+.meal-library > p[role='alert'],
+[aria-labelledby='weekly-planner-heading'] > p[role='status'] {
+  padding: 48px 24px;
+  text-align: center;
+}
+
+/* ── Mobile single-day panel (< 1000px, non-edit view) ───────────────────── */
+.mobile-day-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mobile-day-panel__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mobile-day-panel__heading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.mobile-day-panel__day-name {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--dark);
+}
+
+.mobile-day-panel__date {
+  font-size: 12px;
+  color: var(--light);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mobile-day-panel__date--today {
+  color: var(--protein);
+}
+
+.mobile-day-panel__today-badge {
+  background: var(--protein);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+}
+
+.mobile-day-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobile-day-content__slot {
+  padding: 10px 12px;
+  background: var(--card-alt);
+  border-radius: var(--radius-control);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mobile-day-content__slot--empty {
+  padding: 6px 12px;
+  background: none;
+  opacity: 0.55;
+}
+
+.mobile-day-content__slot-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.mobile-day-content__empty {
+  font-size: 12px;
+  color: var(--light);
+}
+
+.mobile-day-content__meals {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mobile-day-content__meal-btn {
+  width: 100%;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--dark);
+}
+
+.mobile-day-content__meal-btn:hover {
+  background: var(--chip-bg);
+}
+
+.mobile-day-content__actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}
