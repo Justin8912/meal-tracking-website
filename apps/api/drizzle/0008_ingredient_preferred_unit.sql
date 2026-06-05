@@ -1,1 +1,1 @@
-ALTER TABLE ingredients ADD COLUMN preferred_unit TEXT NOT NULL DEFAULT 'g';
+ALTER TABLE ingredients ADD COLUMN IF NOT EXISTS preferred_unit TEXT NOT NULL DEFAULT 'g';

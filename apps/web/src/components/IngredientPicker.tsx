@@ -42,6 +42,12 @@ export const INGREDIENT_UNITS: Array<{ code: string; label: string }> = [
   { code: 'qty',    label: 'quantity' },
 ];
 
+/** Convert oz to grams on the frontend so the engine always receives grams for weight units. */
+function resolveWeightUnit(quantity: number, unitCode: string): [number, string] {
+  if (unitCode === 'oz') return [quantity * 28.3495, 'g'];
+  return [quantity, unitCode];
+}
+
 /** Build the editor line from a saved ingredient, quantity, and unit. */
 function lineFromSaved(
   saved: SavedIngredient,
@@ -118,7 +124,8 @@ function SavedIngredientRow({
           onClick={() => {
             const q = Number.parseFloat(quantity);
             if (!Number.isNaN(q) && q > 0) {
-              onAdd(q, unitCode);
+              const [resolvedQty, resolvedUnit] = resolveWeightUnit(q, unitCode);
+              onAdd(resolvedQty, resolvedUnit);
               setConfirming(false);
               setQuantity('1');
               setUnitCode(item.preferredUnit);
@@ -223,7 +230,8 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
       { fdcId: selected.fdcId },
       {
         onSuccess: (saved) => {
-          onAdd(lineFromSaved(saved, confirmQty, confirmUnit));
+          const [qty, unit] = resolveWeightUnit(confirmQty, confirmUnit);
+          onAdd(lineFromSaved(saved, qty, unit));
           setSelected(null);
           setTerm('');
         },
