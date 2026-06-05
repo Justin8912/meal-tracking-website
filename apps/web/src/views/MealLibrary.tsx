@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import type { MealType, Recipe, RecipeDetail } from '@meal-tracking/shared';
 import { useRecipes, useRecipeDetail, useDeleteRecipe } from '../query/recipes.js';
-import { useTags } from '../query/tags.js';
+import { useTags, useDeleteTag } from '../query/tags.js';
+import type { Tag } from '@meal-tracking/shared';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 import { RecipeEditor, type EditorIngredientLine } from '../components/RecipeEditor.js';
 import { MacroBar } from '../components/MacroBar.js';
@@ -309,11 +310,67 @@ function RecipeDetailPanel({
   );
 }
 
+function TagManagerRow({
+  tag,
+  onDeleted,
+}: {
+  tag: Tag;
+  onDeleted: () => void;
+}): JSX.Element {
+  const [confirming, setConfirming] = useState(false);
+  const deleteTag = useDeleteTag();
+
+  return (
+    <li className="tag-manager__row">
+      <span className="tag-manager__label">{tag.label}</span>
+      {confirming ? (
+        <span className="tag-manager__confirm">
+          <span className="tag-manager__confirm-text">
+            Remove from all recipes?
+          </span>
+          <button
+            type="button"
+            className="tag-manager__confirm-yes"
+            disabled={deleteTag.isPending}
+            onClick={() =>
+              deleteTag.mutate(tag.id, {
+                onSuccess: () => {
+                  setConfirming(false);
+                  onDeleted();
+                },
+                onError: () => setConfirming(false),
+              })
+            }
+          >
+            {deleteTag.isPending ? '...' : 'Delete'}
+          </button>
+          <button
+            type="button"
+            className="tag-manager__confirm-cancel"
+            onClick={() => setConfirming(false)}
+          >
+            Cancel
+          </button>
+        </span>
+      ) : (
+        <button
+          type="button"
+          className="tag-manager__delete-btn"
+          onClick={() => setConfirming(true)}
+        >
+          Remove
+        </button>
+      )}
+    </li>
+  );
+}
+
 export function MealLibrary(): JSX.Element {
   const [mealType, setMealType] = useState('');
   const [tag, setTag] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [editorOpen, setEditorOpen] = useState(false);
+  const [showTagManager, setShowTagManager] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
   const [editIngredients, setEditIngredients] = useState<EditorIngredientLine[]>([]);
   const [editTags, setEditTags] = useState<string[]>([]);
@@ -392,18 +449,43 @@ export function MealLibrary(): JSX.Element {
           </div>
 
           {availableTags.length > 0 ? (
-            <div className="meal-library__pill-row meal-library__pill-row--tags">
-              {availableTags.slice(0, 8).map((t) => (
+            <>
+              <div className="meal-library__pill-row meal-library__pill-row--tags">
+                {availableTags.slice(0, 8).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className={`pill pill--tag${tag === t.label ? ' pill--tag-active' : ''}`}
+                    onClick={() => setTag(tag === t.label ? '' : t.label)}
+                  >
+                    {t.label}
+                  </button>
+                ))}
                 <button
-                  key={t.id}
                   type="button"
-                  className={`pill pill--tag${tag === t.label ? ' pill--tag-active' : ''}`}
-                  onClick={() => setTag(tag === t.label ? '' : t.label)}
+                  className="meal-library__manage-tags-btn"
+                  aria-expanded={showTagManager}
+                  onClick={() => setShowTagManager((v) => !v)}
                 >
-                  {t.label}
+                  {showTagManager ? 'Done' : 'Manage tags'}
                 </button>
-              ))}
-            </div>
+              </div>
+              {showTagManager ? (
+                <div className="tag-manager" aria-label="Manage tags">
+                  <ul className="tag-manager__list">
+                    {availableTags.map((t) => (
+                      <TagManagerRow
+                        key={t.id}
+                        tag={t}
+                        onDeleted={() => {
+                          if (tag === t.label) setTag('');
+                        }}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </>
           ) : null}
 
           {/* Backing selects — sr-only so tests can find them via getByLabelText /

@@ -96,4 +96,18 @@ export function registerTagsRoutes(app: FastifyInstance, db: Db): void {
     const body = tagSchema.parse(toTag(row));
     return reply.code(201).send(body);
   });
+
+  app.delete<{ Params: { id: string } }>('/tags/:id', async (request, reply) => {
+    const workspaceId = await resolveWorkspaceId(db);
+    const deleted = await db
+      .delete(tags)
+      .where(and(eq(tags.id, request.params.id), eq(tags.workspaceId, workspaceId)))
+      .returning({ id: tags.id });
+    if (!deleted[0]) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: 'Tag not found' },
+      });
+    }
+    return reply.code(204).send();
+  });
 }

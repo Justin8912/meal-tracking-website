@@ -1,4 +1,4 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type UseQueryResult, type UseMutationResult } from '@tanstack/react-query';
 import type { Tag } from '@meal-tracking/shared';
 import { apiFetch } from '../api/client.js';
 
@@ -18,4 +18,20 @@ async function fetchTags(): Promise<Tag[]> {
 /** Query hook for the workspace's tags. */
 export function useTags(): UseQueryResult<Tag[], Error> {
   return useQuery({ queryKey: tagsQueryKey(), queryFn: fetchTags });
+}
+
+async function deleteTag(id: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/tags/${id}`, { method: 'DELETE' });
+}
+
+/** Mutation: permanently delete a tag from the workspace (removes it from all recipes). */
+export function useDeleteTag(): UseMutationResult<void, Error, string> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteTag,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: tagsQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: ['recipes'] });
+    },
+  });
 }
