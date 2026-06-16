@@ -54,6 +54,12 @@ const RECIPE_ID = '22222222-2222-2222-2222-222222222222';
 const ING_OATS = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const ING_POWDER = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 
+const INGREDIENT_NULLS = {
+  ingredientId: null,
+  ingredientQuantity: null,
+  ingredientUnitCode: null,
+} as const;
+
 /** A recipe-backed plan entry (recipe_id set). */
 function recipeEntry(): PlanEntry {
   return {
@@ -67,6 +73,7 @@ function recipeEntry(): PlanEntry {
     freeformTitle: null,
     freeformDescription: null,
     freeformLink: null,
+    ...INGREDIENT_NULLS,
   };
 }
 
@@ -82,6 +89,7 @@ function freeformEntry(overrides: Partial<PlanEntry> = {}): PlanEntry {
     freeformTitle: 'Leftover Pizza',
     freeformDescription: 'Two slices from last night',
     freeformLink: 'https://example.com/pizza',
+    ...INGREDIENT_NULLS,
     ...overrides,
   };
 }
@@ -98,6 +106,7 @@ function tombstoneEntry(): PlanEntry {
     freeformTitle: null,
     freeformDescription: null,
     freeformLink: null,
+    ...INGREDIENT_NULLS,
   };
 }
 
