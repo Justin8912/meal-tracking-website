@@ -857,26 +857,19 @@
 <!-- ======================================================= HOW TO USE -->
 <section id="how-to-use">
   <h2>How to Use</h2>
-  <h3>Start the application</h3>
-  <ol class="steps">
-    <li>Copy <code>.env.example</code> to <code>.env</code>. Set <code>POSTGRES_USER</code>, <code>POSTGRES_PASSWORD</code>, <code>POSTGRES_DB</code>, and optionally <code>USDA_API_KEY</code>.</li>
-    <li>Run <code>docker compose up --build</code>. Compose starts PostgreSQL first (waits for the <code>pg_isready</code> health check), then starts the API (which runs all pending Drizzle migrations on boot), then the Web container.</li>
-    <li>Open <code>http://localhost:8090</code>. The weekly planner is the default view.</li>
-    <li>Go to <code>/library</code> to build your recipe library. Click &ldquo;Add Recipe&rdquo;, search for ingredients via the USDA database or create custom ones with manual macros, and save.</li>
-    <li>Return to <code>/planner</code>. Drag recipes from the right-hand palette onto any day/meal slot. Weekly and daily macro summaries update in real time.</li>
-  </ol>
+  <div class="callout info">Testing is done on the server rather than locally. This gives access to the existing ingredients and recipes and avoids CORS issues that appear in a local dev environment.</div>
 
-  <h3>Run migrations manually</h3>
-  <pre><code><span class="kw">docker compose exec</span> <span class="ty">api</span> <span class="str">npm run migrate</span></code></pre>
+  <h3>Testing a branch on the server</h3>
+  <ol class="steps">
+    <li>Tear down the running production containers: <pre><code><span class="kw">sudo docker compose down</span></code></pre> Run this in <code>home-server/apps/meal-tracking-website</code>.</li>
+    <li>Navigate to the test repo and check out the branch to test: <pre><code><span class="kw">cd</span> ~/test/meal-tracking-website
+<span class="kw">git checkout</span> <span class="ty">&lt;branch-name&gt;</span></code></pre></li>
+    <li>Build and start the containers: <pre><code><span class="kw">sudo docker compose up --build</span></code></pre></li>
+  </ol>
 
   <h3>Run tests and lint</h3>
   <pre><code><span class="kw">npm run test</span>      <span class="cm"># vitest across all workspaces</span>
 <span class="kw">npm run lint</span>      <span class="cm"># tsc --noEmit + ESLint across all workspaces</span></code></pre>
-
-  <h3>Run in development mode (no Docker)</h3>
-  <pre><code><span class="cm"># Start Postgres separately, then:</span>
-<span class="kw">cd</span> apps/api &amp;&amp; <span class="str">npm run dev</span>   <span class="cm"># tsx watch, hot-reload</span>
-<span class="kw">cd</span> apps/web &amp;&amp; <span class="str">npm run dev</span>   <span class="cm"># vite dev server with HMR</span></code></pre>
 </section>
 
 <!-- ======================================================= DATA MODEL -->

@@ -52,12 +52,7 @@ export function RecipePalette({ renderCard }: RecipePaletteProps): JSX.Element {
   const hasActiveFilter = mealType !== '' || tag !== '';
 
   return (
-    <aside
-      aria-label="Recipe palette"
-      className="weekly-planner__palette"
-    >
-      <h2>Recipes</h2>
-
+    <div>
       <div className="weekly-planner__palette-filters" role="search">
         <label>
           Meal type
@@ -112,6 +107,6 @@ export function RecipePalette({ renderCard }: RecipePaletteProps): JSX.Element {
           ))}
         </ul>
       )}
-    </aside>
+    </div>
   );
 }

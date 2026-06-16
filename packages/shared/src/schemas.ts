@@ -143,8 +143,8 @@ export const mealSlotSchema = z.enum([
 
 /**
  * POST /plans request body (FR-1, AD-3, S-1). `weekStart` is any date in the
- * target week as YYYY-MM-DD; the server normalizes it to the Monday DATE (AD-2,
- * S-4). `dayOfWeek` is pinned to 0..6 (Monday..Sunday) and `mealSlot` to the
+ * target week as YYYY-MM-DD; the server normalizes it to the Sunday DATE (AD-2,
+ * S-4). `dayOfWeek` is pinned to 0..6 (Sunday..Saturday) and `mealSlot` to the
  * four-slot enum.
  *
  * The `.refine()` enforces the recipe/freeform XOR (AD-3): exactly one of
@@ -154,7 +154,7 @@ export const mealSlotSchema = z.enum([
  */
 export const planEntryInputSchema = z
   .object({
-    // A calendar date, not a timestamp; the server derives the Monday from it.
+    // A calendar date, not a timestamp; the server derives the Sunday from it.
     weekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'weekStart must be YYYY-MM-DD'),
     dayOfWeek: z.number().int().min(0).max(6),
     mealSlot: mealSlotSchema,
@@ -163,13 +163,31 @@ export const planEntryInputSchema = z
     freeformTitle: z.string().trim().min(1).optional(),
     freeformDescription: z.string().nullish(),
     freeformLink: z.string().nullish(),
+    ingredientId: z.string().uuid().optional(),
+    ingredientQuantity: z.number().positive().optional(),
+    ingredientUnitCode: z.string().min(1).optional(),
   })
   .refine(
-    (v) => (v.recipeId != null) !== (v.freeformTitle != null),
+    (v) => {
+      const count = [v.recipeId, v.freeformTitle, v.ingredientId].filter(
+        (x) => x != null,
+      ).length;
+      return count === 1;
+    },
     {
       message:
-        'A plan entry must reference exactly one of a recipeId or a freeformTitle',
+        'A plan entry must reference exactly one of a recipeId, freeformTitle, or ingredientId',
       path: ['recipeId'],
+    },
+  )
+  .refine(
+    (v) =>
+      v.ingredientId == null ||
+      (v.ingredientQuantity != null && v.ingredientUnitCode != null),
+    {
+      message:
+        'ingredientQuantity and ingredientUnitCode are required when ingredientId is set',
+      path: ['ingredientQuantity'],
     },
   );
 

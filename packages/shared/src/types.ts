@@ -170,19 +170,25 @@ export type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack';
  * the Monday DATE (AD-2, S-4). `dayOfWeek` is 0 (Monday) .. 6 (Sunday).
  */
 export interface PlanEntryInput {
-  /** Any date in the target week (YYYY-MM-DD); normalized to the Monday server-side. */
+  /** Any date in the target week (YYYY-MM-DD); normalized to the Sunday server-side. */
   weekStart: string;
-  /** 0 (Monday) .. 6 (Sunday). */
+  /** 0 (Sunday) .. 6 (Saturday). */
   dayOfWeek: number;
   mealSlot: MealSlot;
   /** Optional ordering within a day/slot; defaults to 0 server-side. */
   position?: number;
-  /** Set for a recipe-backed meal (XOR with freeformTitle). */
+  /** Set for a recipe-backed meal (XOR with freeformTitle and ingredientId). */
   recipeId?: string;
-  /** Set for a freeform meal (XOR with recipeId). */
+  /** Set for a freeform meal (XOR with recipeId and ingredientId). */
   freeformTitle?: string;
   freeformDescription?: string | null;
   freeformLink?: string | null;
+  /** Set for a single-ingredient meal (XOR with recipeId and freeformTitle). */
+  ingredientId?: string;
+  /** Required when ingredientId is set. */
+  ingredientQuantity?: number;
+  /** Required when ingredientId is set. */
+  ingredientUnitCode?: string;
 }
 
 /**
@@ -194,9 +200,9 @@ export interface PlanEntryInput {
  */
 export interface PlanEntry {
   id: string;
-  /** The Monday DATE of the week (YYYY-MM-DD), computed server-side (AD-2). */
+  /** The Sunday DATE of the week (YYYY-MM-DD), computed server-side (AD-2). */
   weekStartDate: string;
-  /** 0 (Monday) .. 6 (Sunday). */
+  /** 0 (Sunday) .. 6 (Saturday). */
   dayOfWeek: number;
   mealSlot: MealSlot;
   position: number;
@@ -207,6 +213,12 @@ export interface PlanEntry {
   freeformTitle: string | null;
   freeformDescription: string | null;
   freeformLink: string | null;
+  /** Set for a single-ingredient entry; null otherwise. */
+  ingredientId: string | null;
+  /** Convenience display name for an ingredient-backed entry. */
+  ingredientName?: string;
+  ingredientQuantity: number | null;
+  ingredientUnitCode: string | null;
 }
 
 /**

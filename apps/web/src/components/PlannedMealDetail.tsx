@@ -209,11 +209,66 @@ function RecipeMealBody({ recipeId }: { recipeId: string }): JSX.Element {
   );
 }
 
+/** Detail body for a single-ingredient plan entry. */
+function IngredientMealBody({ entry }: { entry: PlanEntry }): JSX.Element {
+  const { data: allIngredients } = useIngredients();
+  const ingredient = allIngredients?.find((i) => i.id === entry.ingredientId);
+
+  const nutrition = useMemo(() => {
+    if (
+      !ingredient ||
+      entry.ingredientQuantity == null ||
+      entry.ingredientUnitCode == null
+    ) {
+      return null;
+    }
+    const line: NutritionLine = {
+      quantity: entry.ingredientQuantity,
+      unitCode: entry.ingredientUnitCode,
+      ingredient: {
+        id: ingredient.id,
+        referenceGrams: ingredient.referenceGrams,
+        gramEquivalents: ingredient.unitGramEquivalents,
+        gramWeightPerQty: ingredient.gramWeightPerQty,
+        nutrition: toEngineNutrition(ingredient.nutrition),
+        absentMacros: absentMacrosOf(ingredient.nutrition),
+      },
+    };
+    return formatNutrition(computeRecipeNutrition([line], 1).total);
+  }, [ingredient, entry.ingredientQuantity, entry.ingredientUnitCode]);
+
+  const displayName = entry.ingredientName ?? ingredient?.name ?? 'Ingredient';
+
+  return (
+    <>
+      <h3>{displayName}</h3>
+      <p className="planned-meal-detail__notes">
+        {entry.ingredientQuantity}
+        {entry.ingredientUnitCode}
+      </p>
+      {nutrition ? (
+        <div className="recipe-row__macro-bars">
+          <dl className="macro-bars">
+            <MacroBar variant="protein" label="Protein" value={nutrition.proteinG} />
+            <MacroBar variant="carbs" label="Carbs" value={nutrition.carbsG} />
+            <MacroBar variant="fat" label="Fat" value={nutrition.fatG} />
+            <MacroBar variant="fiber" label="Fiber" value={nutrition.fiberG} />
+          </dl>
+          <p className="recipe-row__kcal">{nutrition.calories} kcal</p>
+        </div>
+      ) : null}
+      {ingredient?.notes ? (
+        <p className="planned-meal-detail__notes">{ingredient.notes}</p>
+      ) : null}
+    </>
+  );
+}
+
 export function PlannedMealDetail({ entry }: PlannedMealDetailProps): JSX.Element {
-  // Branch on the entry shape (AD-3). A freeform entry has freeformTitle; a
-  // recipe-backed entry has recipeId; a tombstone has neither.
+  // Branch on the entry shape (AD-3).
   const isFreeform = entry.freeformTitle != null;
   const isRecipe = entry.recipeId != null;
+  const isIngredient = entry.ingredientId != null;
 
   return (
     <section
@@ -230,20 +285,18 @@ export function PlannedMealDetail({ entry }: PlannedMealDetailProps): JSX.Elemen
               {entry.freeformDescription}
             </p>
           ) : null}
-          {/* Render the link only when present so an absent link never produces
-              a broken/empty anchor (AC-2.1). */}
           {entry.freeformLink ? (
             <p>
               <a href={entry.freeformLink}>Meal link</a>
             </p>
           ) : null}
         </>
+      ) : isIngredient ? (
+        <IngredientMealBody entry={entry} />
       ) : isRecipe ? (
         <RecipeMealBody recipeId={entry.recipeId as string} />
       ) : (
-        // recipe_id NULL + no freeform fields: the referenced recipe was deleted
-        // (tombstone, AD-3). The slot is preserved; show a clear removed state
-        // rather than crashing or rendering blank nutrition.
+        // All three ids are null: recipe tombstone (ON DELETE SET NULL).
         <p className="planned-meal-detail__tombstone">
           Recipe removed. This meal&apos;s recipe was deleted from the library.
         </p>
