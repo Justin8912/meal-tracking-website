@@ -228,6 +228,42 @@ export function useDeleteIngredient(): UseMutationResult<void, Error, string> {
   });
 }
 
+/** PUT /ingredients/:id body — full update for custom ingredients. */
+export interface IngredientUpdateInput {
+  name: string;
+  calories?: number | null;
+  proteinG?: number | null;
+  carbsG?: number | null;
+  fatG?: number | null;
+  fiberG?: number | null;
+  notes?: string | null;
+}
+
+async function updateIngredient(
+  args: { id: string } & IngredientUpdateInput,
+): Promise<SavedIngredient> {
+  const { id, ...body } = args;
+  return apiFetch<SavedIngredient>(`/api/v1/ingredients/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+/** Mutation: full update for a custom ingredient (PUT /ingredients/:id). */
+export function useUpdateIngredient(): UseMutationResult<
+  SavedIngredient,
+  Error,
+  { id: string } & IngredientUpdateInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updateIngredient,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ingredients'] });
+    },
+  });
+}
+
 async function updateIngredientNote(args: { id: string; notes: string | null }): Promise<SavedIngredient> {
   return apiFetch<SavedIngredient>(`/api/v1/ingredients/${args.id}`, {
     method: 'PATCH',
