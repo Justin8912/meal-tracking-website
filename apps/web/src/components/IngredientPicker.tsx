@@ -7,7 +7,6 @@ import {
   useSnapshotUsdaIngredient,
   useCreateCustomIngredient,
   useDeleteIngredient,
-  useUpdateIngredientNote,
   toEngineNutrition,
   absentMacrosOf,
   type SavedIngredient,
@@ -81,8 +80,7 @@ function availableUnitsFor(item: SavedIngredient): Array<{ code: string; label: 
 }
 
 /** A saved ingredient row — shows name + source badge, then a quantity+unit
- *  confirm step before adding. Custom ingredients also have a delete button.
- *  Any ingredient can have its note viewed and edited inline. */
+ *  confirm step before adding. Custom ingredients also have a delete button. */
 function SavedIngredientRow({
   item,
   onAdd,
@@ -91,22 +89,12 @@ function SavedIngredientRow({
   onAdd: (quantity: number, unitCode: string) => void;
 }): JSX.Element {
   const deleteIngredient = useDeleteIngredient();
-  const updateNote = useUpdateIngredientNote();
   const [confirming, setConfirming] = useState(false);
   const [quantity, setQuantity] = useState('1');
   const [unitCode, setUnitCode] = useState(item.preferredUnit);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [editingNote, setEditingNote] = useState(false);
-  const [noteValue, setNoteValue] = useState(item.notes ?? '');
 
   const units = availableUnitsFor(item);
-
-  function saveNote(): void {
-    updateNote.mutate(
-      { id: item.id, notes: noteValue.trim() === '' ? null : noteValue.trim() },
-      { onSuccess: () => setEditingNote(false) },
-    );
-  }
 
   if (confirming) {
     return (
@@ -191,46 +179,6 @@ function SavedIngredientRow({
         >
           ×
         </button>
-      )}
-      {editingNote ? (
-        <div className="ingredient-picker__note-edit">
-          <textarea
-            value={noteValue}
-            onChange={(e) => setNoteValue(e.target.value)}
-            rows={2}
-            placeholder="Add a note about this ingredient..."
-            aria-label="Ingredient note"
-            className="ingredient-picker__note-textarea"
-          />
-          {updateNote.error ? (
-            <span className="ingredient-picker__note-error">{updateNote.error.message}</span>
-          ) : null}
-          <div className="ingredient-picker__note-actions">
-            <button
-              type="button"
-              onClick={saveNote}
-              disabled={updateNote.isPending}
-            >
-              {updateNote.isPending ? 'Saving...' : 'Save note'}
-            </button>
-            <button type="button" onClick={() => { setEditingNote(false); setNoteValue(item.notes ?? ''); }}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="ingredient-picker__note-row">
-          {item.notes ? (
-            <span className="ingredient-picker__note-text">{item.notes}</span>
-          ) : null}
-          <button
-            type="button"
-            className="ingredient-picker__note-btn"
-            onClick={() => { setNoteValue(item.notes ?? ''); setEditingNote(true); }}
-          >
-            {item.notes ? 'Edit note' : 'Add note'}
-          </button>
-        </div>
       )}
     </li>
   );
