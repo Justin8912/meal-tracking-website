@@ -223,18 +223,22 @@ function IngredientDetailPanel({
   const n = item.nutrition;
 
   if (editing) {
-    return item.source === 'custom' ? (
-      <IngredientEditForm
-        item={item}
-        onSaved={() => setEditing(false)}
-        onCancel={() => setEditing(false)}
-      />
-    ) : (
-      <UsdaNoteEdit
-        item={item}
-        onSaved={() => setEditing(false)}
-        onCancel={() => setEditing(false)}
-      />
+    return (
+      <div className="recipe-row__detail">
+        {item.source === 'custom' ? (
+          <IngredientEditForm
+            item={item}
+            onSaved={() => setEditing(false)}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <UsdaNoteEdit
+            item={item}
+            onSaved={() => setEditing(false)}
+            onCancel={() => setEditing(false)}
+          />
+        )}
+      </div>
     );
   }
 
