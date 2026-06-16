@@ -16,25 +16,33 @@ import { useWeeklySummary, useDailyNutrition, type DayNutrition } from '../query
  */
 
 const DAY_LABELS = [
-  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
 ] as const;
 
-const DAY_ABBR = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 export interface WeeklyNutritionSummaryProps {
   weekStart: string;
   entries: PlanEntry[];
-  /** When set, skip the day-tab UI and show only this day (0=Mon…6=Sun). */
+  /** When set, skip the day-tab UI and show only this day (0=Sun…6=Sat). */
   singleDay?: number;
 }
 
 function entryLabel(entry: PlanEntry): string {
+  if (entry.ingredientId) {
+    const name = entry.ingredientName ?? 'Ingredient';
+    const qty = entry.ingredientQuantity;
+    const unit = entry.ingredientUnitCode;
+    return qty != null ? `${name} (${qty}${unit})` : name;
+  }
   return entry.freeformTitle ?? entry.recipeName ?? 'Recipe removed';
 }
 
 function isExcluded(entry: PlanEntry): boolean {
-  // freeform meals and tombstones have no recipe nutrition
-  return entry.freeformTitle != null || (!entry.recipeId && !entry.freeformTitle);
+  // Freeform meals and tombstones have no nutrition; ingredient and recipe
+  // entries both contribute real macros and are counted.
+  return entry.freeformTitle != null ||
+    (!entry.recipeId && !entry.freeformTitle && !entry.ingredientId);
 }
 
 /** A single pill showing a macro value. */
