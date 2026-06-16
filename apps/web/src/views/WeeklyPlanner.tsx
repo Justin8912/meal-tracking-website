@@ -773,7 +773,6 @@ function MobileDayPanel({
           type="button"
           className="week-nav__arrow"
           aria-label="Previous day"
-          disabled={dayIdx === 0}
           onClick={() => onChangeDay(dayIdx - 1)}
         >
           <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden>
@@ -802,7 +801,6 @@ function MobileDayPanel({
           type="button"
           className="week-nav__arrow"
           aria-label="Next day"
-          disabled={dayIdx === 6}
           onClick={() => onChangeDay(dayIdx + 1)}
         >
           <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden>
@@ -855,6 +853,20 @@ export function WeeklyPlanner(): JSX.Element {
     const list = byDay.get(entry.dayOfWeek) ?? [];
     list.push(entry);
     byDay.set(entry.dayOfWeek, list);
+  }
+
+  // Mobile day navigation: wrap across week boundaries instead of clamping.
+  // idx < 0 means "previous Saturday" → go back a week; idx > 6 means "next Sunday" → advance a week.
+  function handleChangeMobileDay(idx: number): void {
+    if (idx < 0) {
+      setWeekStart((w) => shiftWeek(w, 'prev'));
+      setMobileDayIdx(6); // land on Saturday of the previous week
+    } else if (idx > 6) {
+      setWeekStart((w) => shiftWeek(w, 'next'));
+      setMobileDayIdx(0); // land on Sunday of the next week
+    } else {
+      setMobileDayIdx(idx);
+    }
   }
 
   // Compute the current week's Sunday offset relative to now for the label.
@@ -977,7 +989,7 @@ export function WeeklyPlanner(): JSX.Element {
           byDay={byDay}
           dates={dates}
           dayIdx={mobileDayIdx}
-          onChangeDay={setMobileDayIdx}
+          onChangeDay={handleChangeMobileDay}
         />
       ) : (
         week
