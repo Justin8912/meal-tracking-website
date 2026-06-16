@@ -177,12 +177,18 @@ export interface PlanEntryInput {
   mealSlot: MealSlot;
   /** Optional ordering within a day/slot; defaults to 0 server-side. */
   position?: number;
-  /** Set for a recipe-backed meal (XOR with freeformTitle). */
+  /** Set for a recipe-backed meal (XOR with freeformTitle and ingredientId). */
   recipeId?: string;
-  /** Set for a freeform meal (XOR with recipeId). */
+  /** Set for a freeform meal (XOR with recipeId and ingredientId). */
   freeformTitle?: string;
   freeformDescription?: string | null;
   freeformLink?: string | null;
+  /** Set for a single-ingredient meal (XOR with recipeId and freeformTitle). */
+  ingredientId?: string;
+  /** Required when ingredientId is set. */
+  ingredientQuantity?: number;
+  /** Required when ingredientId is set. */
+  ingredientUnitCode?: string;
 }
 
 /**
@@ -207,6 +213,12 @@ export interface PlanEntry {
   freeformTitle: string | null;
   freeformDescription: string | null;
   freeformLink: string | null;
+  /** Set for a single-ingredient entry; null otherwise. */
+  ingredientId: string | null;
+  /** Convenience display name for an ingredient-backed entry. */
+  ingredientName?: string;
+  ingredientQuantity: number | null;
+  ingredientUnitCode: string | null;
 }
 
 /**
