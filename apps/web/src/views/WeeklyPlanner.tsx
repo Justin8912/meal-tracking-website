@@ -89,14 +89,19 @@ function sundayOf(from: Date): string {
 
 /** Display label for a single plan entry (recipe name, freeform title, or tombstone). */
 function entryLabel(entry: PlanEntry): string {
+  if (entry.ingredientId) {
+    const name = entry.ingredientName ?? 'Ingredient';
+    const qty = entry.ingredientQuantity;
+    const unit = entry.ingredientUnitCode;
+    return qty != null ? `${name} (${qty}${unit})` : name;
+  }
   if (entry.freeformTitle) {
     return entry.freeformTitle;
   }
   if (entry.recipeId) {
     return entry.recipeName ?? 'Recipe';
   }
-  // recipe_id NULL + no freeform fields: the referenced recipe was deleted
-  // (tombstone, AD-3). The slot is preserved, not dropped.
+  // recipe_id NULL + no other fields: recipe tombstone (ON DELETE SET NULL).
   return 'Recipe removed';
 }
 
