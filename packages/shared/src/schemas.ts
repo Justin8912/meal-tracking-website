@@ -163,13 +163,31 @@ export const planEntryInputSchema = z
     freeformTitle: z.string().trim().min(1).optional(),
     freeformDescription: z.string().nullish(),
     freeformLink: z.string().nullish(),
+    ingredientId: z.string().uuid().optional(),
+    ingredientQuantity: z.number().positive().optional(),
+    ingredientUnitCode: z.string().min(1).optional(),
   })
   .refine(
-    (v) => (v.recipeId != null) !== (v.freeformTitle != null),
+    (v) => {
+      const count = [v.recipeId, v.freeformTitle, v.ingredientId].filter(
+        (x) => x != null,
+      ).length;
+      return count === 1;
+    },
     {
       message:
-        'A plan entry must reference exactly one of a recipeId or a freeformTitle',
+        'A plan entry must reference exactly one of a recipeId, freeformTitle, or ingredientId',
       path: ['recipeId'],
+    },
+  )
+  .refine(
+    (v) =>
+      v.ingredientId == null ||
+      (v.ingredientQuantity != null && v.ingredientUnitCode != null),
+    {
+      message:
+        'ingredientQuantity and ingredientUnitCode are required when ingredientId is set',
+      path: ['ingredientQuantity'],
     },
   );
 
