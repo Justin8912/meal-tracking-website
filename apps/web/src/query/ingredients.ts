@@ -46,6 +46,7 @@ export interface SavedIngredient {
   gramWeightPerQty: number | null;
   unitGramEquivalents: Record<string, number>;
   preferredUnit: string;
+  notes: string | null;
   nutrition: {
     calories?: number;
     proteinG?: number;
@@ -183,6 +184,7 @@ export interface CustomIngredientInput {
   gramWeightPerQty?: number;
   unitGramEquivalents?: Record<string, number>;
   preferredUnit: string;
+  notes?: string | null;
 }
 
 async function createCustomIngredient(
@@ -220,6 +222,28 @@ export function useDeleteIngredient(): UseMutationResult<void, Error, string> {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: deleteIngredient,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ingredients'] });
+    },
+  });
+}
+
+async function updateIngredientNote(args: { id: string; notes: string | null }): Promise<SavedIngredient> {
+  return apiFetch<SavedIngredient>(`/api/v1/ingredients/${args.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ notes: args.notes }),
+  });
+}
+
+/** Mutation: update the notes field on an existing ingredient (PATCH /ingredients/:id). */
+export function useUpdateIngredientNote(): UseMutationResult<
+  SavedIngredient,
+  Error,
+  { id: string; notes: string | null }
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updateIngredientNote,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['ingredients'] });
     },

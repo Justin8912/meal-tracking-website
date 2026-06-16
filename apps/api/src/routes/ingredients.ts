@@ -68,6 +68,7 @@ const customIngredientInputSchema = z
     gramWeightPerQty: z.number().positive().optional(),
     unitGramEquivalents: z.record(z.string(), z.number().positive()).optional(),
     preferredUnit: z.string().default('g'),
+    notes: z.string().nullish(),
   })
   .refine(
     (v) =>
@@ -102,9 +103,15 @@ const ingredientResponseSchema = z.object({
   gramWeightPerQty: z.number().nullable(),
   unitGramEquivalents: z.record(z.string(), z.number()),
   preferredUnit: z.string(),
+  notes: z.string().nullable(),
   nutrition: per100gSchema,
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
+});
+
+/** PATCH /ingredients/:id body — currently supports updating the notes field. */
+const ingredientPatchSchema = z.object({
+  notes: z.string().nullish(),
 });
 
 const ingredientListSchema = z.array(ingredientResponseSchema);
@@ -143,6 +150,7 @@ export function toIngredientResponse(row: IngredientRow) {
     gramWeightPerQty: numOrUndefined(row.gramWeightPerQty) ?? null,
     unitGramEquivalents: row.unitGramEquivalents,
     preferredUnit: row.preferredUnit,
+    notes: row.notes ?? null,
     nutrition,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -367,6 +375,7 @@ export function registerIngredientsRoutes(
           fatG: input.fatG !== undefined ? String(input.fatG) : null,
           fiberG: input.fiberG !== undefined ? String(input.fiberG) : null,
           micronutrients: input.micronutrients ?? {},
+          notes: input.notes ?? null,
         })
         .returning();
       row = inserted[0];
@@ -380,6 +389,56 @@ export function registerIngredientsRoutes(
     const body = ingredientResponseSchema.parse(toIngredientResponse(row));
     return reply.code(201).send(body);
   });
+
+  // PATCH /ingredients/:id — update mutable fields on any owned ingredient.
+  // Currently supports `notes` only. Returns the updated ingredient.
+  app.patch<{ Params: { id: string } }>(
+    '/ingredients/:id',
+    async (request, reply) => {
+      const parsed = ingredientPatchSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: parsed.error.issues[0]?.message ?? 'Invalid patch payload',
+          },
+        });
+      }
+
+      const workspaceId = await resolveWorkspaceId(_db);
+      const { id } = request.params;
+
+      const existing = await _db
+        .select()
+        .from(ingredients)
+        .where(and(eq(ingredients.id, id), eq(ingredients.workspaceId, workspaceId)))
+        .limit(1);
+
+      if (!existing[0]) {
+        return reply.code(404).send({
+          error: { code: 'NOT_FOUND', message: 'Ingredient not found' },
+        });
+      }
+
+      let row: IngredientRow | undefined;
+      try {
+        const updated = await _db
+          .update(ingredients)
+          .set({ notes: parsed.data.notes ?? null, updatedAt: new Date() })
+          .where(and(eq(ingredients.id, id), eq(ingredients.workspaceId, workspaceId)))
+          .returning();
+        row = updated[0];
+      } catch (err) {
+        throw new PersistenceError('Failed to update ingredient', { cause: err });
+      }
+      if (!row) {
+        throw new PersistenceError('Ingredient update returned no row');
+      }
+
+      const body = ingredientResponseSchema.parse(toIngredientResponse(row));
+      return reply.code(200).send(body);
+    },
+  );
 
   // AC-3.3: list the workspace's saved ingredients (custom + USDA snapshots).
   app.get('/ingredients', async (_request, reply) => {

@@ -84,6 +84,7 @@ export const ingredients = pgTable(
       .notNull()
       .default({}),
     preferredUnit: text('preferred_unit').notNull().default('g'),
+    notes: text('notes'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
