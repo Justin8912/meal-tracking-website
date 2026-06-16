@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="repo-doc-sha" content="7ba0264c6a7344951cfcb95d5dfa4a0e41f91b57">
+  <title>meal-tracking-website — System Overview</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --orange: #d29922;
+      --red: #f85149;
+      --purple: #bc8cff;
+      --sidebar-w: 220px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    #sidebar {
+      position: fixed;
+      top: 0; left: 0;
+      width: var(--sidebar-w);
+      height: 100vh;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 16px 0;
+      z-index: 100;
+    }
+    #sidebar .sidebar-logo {
+      padding: 8px 16px 16px;
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--text);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+    #sidebar .group-label {
+      padding: 8px 16px 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+    }
+    #sidebar a {
+      display: block;
+      padding: 5px 16px;
+      font-size: 13px;
+      color: var(--muted);
+      transition: color .15s, background .15s;
+    }
+    #sidebar a:hover { color: var(--text); background: rgba(255,255,255,.05); text-decoration: none; }
+
+    #content {
+      margin-left: var(--sidebar-w);
+      padding: 32px 48px;
+      max-width: 1100px;
+    }
+
+    section { margin-bottom: 52px; }
+    h1 { font-size: 26px; font-weight: 700; margin-bottom: 10px; }
+    h2 { font-size: 19px; font-weight: 600; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 15px; font-weight: 600; margin: 24px 0 10px; }
+    h4 { font-size: 12px; font-weight: 600; margin: 16px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    p { margin-bottom: 12px; }
+
+    .badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 16px; }
+    .badge {
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .02em;
+    }
+    .badge-blue   { background: #1d3a6b; color: #79c0ff; }
+    .badge-green  { background: #1a3a2a; color: #56d364; }
+    .badge-orange { background: #3d2a00; color: #f0883e; }
+    .badge-purple { background: #2d1f4a; color: #d2a8ff; }
+    .badge-gray   { background: #21262d; color: var(--muted); }
+    .badge-teal   { background: #0d2d2d; color: #39d353; }
+
+    .card-row { display: grid; gap: 16px; margin: 14px 0; }
+    .card-row.cols-2 { grid-template-columns: 1fr 1fr; }
+    .card-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px;
+    }
+    .card h4 { margin-top: 0; }
+    .card p { margin-bottom: 0; font-size: 13px; color: var(--muted); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
+    th {
+      background: #1c2128;
+      text-align: left;
+      padding: 7px 12px;
+      font-weight: 600;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    td { padding: 7px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.02); }
+
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: rgba(88,166,255,.07);
+      padding: 11px 16px;
+      border-radius: 0 6px 6px 0;
+      margin: 12px 0;
+      font-size: 13px;
+    }
+    .callout.warn { border-color: #d29922; background: rgba(210,153,34,.07); }
+    .callout.info { border-color: #3fb950; background: rgba(63,185,80,.07); }
+    .callout.note { border-color: #bc8cff; background: rgba(188,140,255,.07); }
+    .callout strong { font-weight: 600; }
+
+    .method {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      font-family: monospace;
+    }
+    .get    { background: #1a3a2a; color: #56d364; }
+    .post   { background: #1d3a6b; color: #79c0ff; }
+    .put    { background: #3d2a00; color: #f0883e; }
+    .delete { background: #3d1010; color: #f85149; }
+
+    .status-pill {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .pill-green  { background: #1a3a2a; color: #56d364; }
+    .pill-blue   { background: #1d3a6b; color: #79c0ff; }
+    .pill-purple { background: #2d1f4a; color: #d2a8ff; }
+
+    ol.steps { counter-reset: step; list-style: none; padding: 0; }
+    ol.steps li {
+      counter-increment: step;
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+      align-items: flex-start;
+    }
+    ol.steps li::before {
+      content: counter(step);
+      flex-shrink: 0;
+      width: 24px; height: 24px;
+      background: var(--accent);
+      color: var(--bg);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    pre {
+      background: #161b22;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px;
+      overflow-x: auto;
+      font-size: 12px;
+      line-height: 1.55;
+      font-family: 'SF Mono', 'JetBrains Mono', Consolas, monospace;
+      margin: 8px 0;
+    }
+    code {
+      font-family: 'SF Mono', 'JetBrains Mono', Consolas, monospace;
+      font-size: 12px;
+      background: rgba(255,255,255,.06);
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    pre code { background: none; padding: 0; }
+    .kw { color: #ff7b72; }
+    .str { color: #a5d6ff; }
+    .ty  { color: #ffa657; }
+    .cm  { color: #8b949e; font-style: italic; }
+    .prop{ color: #79c0ff; }
+
+    #archWrap {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #0a0d13;
+      margin: 12px 0;
+      overflow: hidden;
+      position: relative;
+      height: 520px;
+      cursor: grab;
+    }
+    #archWrap:active { cursor: grabbing; }
+    .arch-hint { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .arch-controls {
+      position: absolute;
+      top: 10px; right: 10px;
+      display: flex; gap: 4px;
+      z-index: 10;
+    }
+    .arch-controls button {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 3px 9px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .arch-controls button:hover { background: #21262d; }
+
+    footer {
+      margin-top: 48px;
+      padding: 20px 0;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+  </style>
+</head>
+<body>
+
+<nav id="sidebar">
+  <div class="sidebar-logo">meal-tracking-website</div>
+  <div class="group-label">Overview</div>
+  <a href="#header">Header</a>
+  <a href="#what-it-does">What it does</a>
+  <a href="#external-deps">External Dependencies</a>
+  <a href="#architecture">Architecture</a>
+  <div class="group-label">Components</div>
+  <a href="#comp-api">API</a>
+  <a href="#comp-web">Web</a>
+  <a href="#comp-shared-libs">Shared Libraries</a>
+  <div class="group-label">Operations</div>
+  <a href="#permissions">Permissions</a>
+  <a href="#how-to-use">How to Use</a>
+  <a href="#data-model">Data Model</a>
+  <a href="#monitoring">Monitoring</a>
+  <a href="#environments">Environments</a>
+</nav>
+
+<div id="content">
+
+<!-- ======================================================= HEADER -->
+<section id="header">
+  <h1>Nourish &mdash; meal-tracking-website</h1>
+  <p>Personal meal planning and nutrition tracking application. Provides a recipe library, a 7-day weekly planner with drag-and-drop scheduling, and full macro/micronutrient computation backed by the USDA FoodData Central database.</p>
+  <div class="badges">
+    <span class="badge badge-gray">Node.js &ge;20</span>
+    <span class="badge badge-orange">Fastify 5.8</span>
+    <span class="badge badge-teal">React 18.3</span>
+    <span class="badge badge-green">PostgreSQL 16</span>
+    <span class="badge badge-blue">TypeScript 5.7</span>
+    <span class="badge badge-purple">Drizzle ORM</span>
+    <span class="badge badge-blue">TanStack Query 5</span>
+    <span class="badge badge-gray">Docker Compose</span>
+    <span class="badge badge-gray">npm workspaces monorepo</span>
+  </div>
+  <p style="font-size:13px;color:var(--muted);">
+    <a href="https://github.com/Justin8912/meal-tracking-website" target="_blank">github.com/Justin8912/meal-tracking-website</a>
+    &nbsp;&middot;&nbsp;
+    Last updated: <a href="https://github.com/Justin8912/meal-tracking-website/commit/7ba0264c6a7344951cfcb95d5dfa4a0e41f91b57" target="_blank"><code>7ba0264</code></a>
+  </p>
+</section>
+
+<!-- ======================================================= WHAT IT DOES -->
+<section id="what-it-does">
+  <h2>What it does</h2>
+  <div class="card-row cols-3">
+    <div class="card">
+      <h4>Primary Resource</h4>
+      <p>Recipe library with ingredient composition. Each recipe carries a complete macro/micronutrient profile derived from USDA-sourced or custom ingredients, computed by the shared <code>nutrition-engine</code> package.</p>
+    </div>
+    <div class="card">
+      <h4>Source of Truth</h4>
+      <p>PostgreSQL is the system of record for all user data. USDA FoodData Central is the authoritative source for food nutrition data; fetched payloads are cached locally in <code>usdaFoodCache</code>.</p>
+    </div>
+    <div class="card">
+      <h4>Downstream Effects</h4>
+      <p>The weekly planner draws from the recipe library to produce per-day and weekly macro summaries. Freeform meal entries are supported but excluded from aggregated nutrition totals.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= EXTERNAL DEPS -->
+<section id="external-deps">
+  <h2>External Dependencies</h2>
+  <div class="callout info">This is a personal project running on Docker Compose &mdash; there are no AWS resources, no cloud observability services, and no identity providers. The only external runtime dependency is the USDA nutrition database API.</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Service</th><th>Base URL</th><th>Auth</th><th>Purpose</th><th>Failure Mode</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>USDA FoodData Central</td>
+        <td><code>https://api.nal.usda.gov/fdc/v1</code></td>
+        <td>API key via <code>USDA_API_KEY</code> env var (optional)</td>
+        <td>Food search and nutrition detail. Used by <code>GET /ingredients/search</code> and <code>GET /ingredients/usda/:fdcId</code>.</td>
+        <td>Graceful degradation &mdash; ingredient search returns an error envelope; items already cached in PostgreSQL remain available; custom ingredients are unaffected.</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="callout warn">
+    <strong>No USDA key configured:</strong> The key is optional but recommended for production use. Without it, USDA requests will be unauthenticated and may be rate-limited. Set <code>USDA_API_KEY</code> in <code>.env</code>.
+  </div>
+</section>
+
+<!-- ======================================================= ARCHITECTURE -->
+<section id="architecture">
+  <h2>Architecture</h2>
+  <p class="arch-hint">
+    <span style="color:#79c0ff">&#9632; React/Nginx</span> &nbsp;
+    <span style="color:#f0883e">&#9632; Fastify API</span> &nbsp;
+    <span style="color:#56d364">&#9632; PostgreSQL</span> &nbsp;
+    <span style="color:#f85149">&#9632; External service</span> &nbsp;
+    <span style="color:#d2a8ff">&#9632; Library package</span>
+    &nbsp;&nbsp;&nbsp;scroll to zoom &middot; drag to pan &middot; Fit to reset
+  </p>
+  <div id="archWrap">
+    <div class="arch-controls">
+      <button onclick="archZoom(1.2)">+</button>
+      <button onclick="archZoom(0.83)">&minus;</button>
+      <button onclick="archFit()">Fit</button>
+    </div>
+    <svg id="archSvg" xmlns="http://www.w3.org/2000/svg" width="1020" height="510" viewBox="0 0 1020 510">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10z" fill="#8b949e"/>
+        </marker>
+        <marker id="arr-ext" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10z" fill="#f85149"/>
+        </marker>
+        <marker id="arr-lib" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10z" fill="#d2a8ff"/>
+        </marker>
+        <marker id="arr-cache" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10z" fill="#56d364"/>
+        </marker>
+      </defs>
+
+      <rect width="1020" height="510" fill="#0a0d13"/>
+
+      <!-- Docker Compose zone -->
+      <rect x="165" y="50" width="660" height="330" rx="10" fill="none" stroke="#30363d" stroke-width="1.5" stroke-dasharray="6,3"/>
+      <text x="185" y="72" font-family="sans-serif" font-size="11" fill="#8b949e">Docker Compose Network</text>
+
+      <!-- External zone -->
+      <rect x="845" y="50" width="155" height="120" rx="10" fill="none" stroke="#5c1a1a" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <text x="862" y="72" font-family="sans-serif" font-size="11" fill="#f85149">External</text>
+
+      <!-- CI/CD zone -->
+      <rect x="845" y="190" width="155" height="80" rx="10" fill="none" stroke="#30363d" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <text x="862" y="209" font-family="sans-serif" font-size="11" fill="#8b949e">CI / CD</text>
+
+      <!-- Library packages zone -->
+      <rect x="305" y="310" width="380" height="110" rx="10" fill="none" stroke="#4a2d7a" stroke-width="1" stroke-dasharray="4,3"/>
+      <text x="322" y="330" font-family="sans-serif" font-size="11" fill="#d2a8ff">Library Packages (npm workspaces, not deployable)</text>
+
+      <!-- Browser node -->
+      <rect x="18" y="155" width="125" height="80" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+      <text x="80" y="187" font-family="sans-serif" font-size="12" font-weight="600" fill="#e6edf3" text-anchor="middle">Browser</text>
+      <text x="80" y="204" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">User Client</text>
+      <text x="80" y="220" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">http://localhost:8090</text>
+
+      <!-- Web node -->
+      <rect x="183" y="130" width="155" height="110" rx="8" fill="#0d1f3c" stroke="#1f4080" stroke-width="1.5"/>
+      <text x="260" y="162" font-family="sans-serif" font-size="12" font-weight="600" fill="#79c0ff" text-anchor="middle">Web (Nginx)</text>
+      <text x="260" y="179" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">React 18 SPA</text>
+      <text x="260" y="196" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">Vite 6 &middot; React Router 6</text>
+      <text x="260" y="213" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">dnd-kit &middot; TanStack Query 5</text>
+      <text x="260" y="230" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">port 8090 &rarr; :8080</text>
+
+      <!-- API node -->
+      <rect x="383" y="118" width="165" height="135" rx="8" fill="#261500" stroke="#6a3800" stroke-width="1.5"/>
+      <text x="465" y="150" font-family="sans-serif" font-size="12" font-weight="600" fill="#f0883e" text-anchor="middle">API (Fastify)</text>
+      <text x="465" y="167" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">@meal-tracking/api</text>
+      <text x="465" y="184" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">Node.js &ge;20 &middot; ESM</text>
+      <text x="465" y="201" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">Drizzle ORM &middot; Pino &middot; Zod</text>
+      <text x="465" y="218" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">20 REST endpoints</text>
+      <text x="465" y="235" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">port 8100 &rarr; :3000</text>
+
+      <!-- Postgres node -->
+      <rect x="598" y="138" width="175" height="110" rx="8" fill="#0a2a1a" stroke="#1a5c30" stroke-width="1.5"/>
+      <text x="685" y="170" font-family="sans-serif" font-size="12" font-weight="600" fill="#56d364" text-anchor="middle">PostgreSQL 16</text>
+      <text x="685" y="188" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">9 tables &middot; Drizzle migrations</text>
+      <text x="685" y="205" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">pgdata Docker volume</text>
+      <text x="685" y="222" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">health: pg_isready</text>
+      <text x="685" y="239" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">port 5432 (internal)</text>
+
+      <!-- USDA node -->
+      <rect x="858" y="80" width="128" height="76" rx="8" fill="#250e0e" stroke="#5c1a1a" stroke-width="1.5"/>
+      <text x="922" y="106" font-family="sans-serif" font-size="11" font-weight="600" fill="#f85149" text-anchor="middle">USDA FoodData</text>
+      <text x="922" y="123" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">api.nal.usda.gov</text>
+      <text x="922" y="140" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">optional API key</text>
+
+      <!-- Docker Hub node -->
+      <rect x="860" y="214" width="125" height="44" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+      <text x="922" y="233" font-family="sans-serif" font-size="11" font-weight="600" fill="#8b949e" text-anchor="middle">Docker Hub</text>
+      <text x="922" y="250" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">justin8912/*:latest</text>
+
+      <!-- nutrition-engine package -->
+      <rect x="320" y="340" width="155" height="68" rx="8" fill="#1a0d2e" stroke="#4a2d7a" stroke-width="1.5"/>
+      <text x="397" y="366" font-family="sans-serif" font-size="11" font-weight="600" fill="#d2a8ff" text-anchor="middle">nutrition-engine</text>
+      <text x="397" y="383" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">pure compute: toGrams</text>
+      <text x="397" y="399" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">computeRecipeNutrition</text>
+
+      <!-- shared package -->
+      <rect x="500" y="340" width="155" height="68" rx="8" fill="#1c2128" stroke="#30363d" stroke-width="1.5"/>
+      <text x="577" y="366" font-family="sans-serif" font-size="11" font-weight="600" fill="#c9d1d9" text-anchor="middle">shared</text>
+      <text x="577" y="383" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">Zod schemas &amp; types</text>
+      <text x="577" y="399" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">ErrorEnvelope &middot; RecipeInput</text>
+
+      <!-- GitHub Actions row -->
+      <rect x="300" y="432" width="420" height="48" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+      <text x="510" y="453" font-family="sans-serif" font-size="11" font-weight="600" fill="#8b949e" text-anchor="middle">GitHub Actions &mdash; deploy-application.yaml</text>
+      <text x="510" y="471" font-family="sans-serif" font-size="10" fill="#8b949e" text-anchor="middle">push to main &rarr; build &amp; push API + Web Docker images to Docker Hub</text>
+
+      <!-- Arrows -->
+      <!-- Browser -> Web -->
+      <line x1="143" y1="195" x2="181" y2="190" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="146" y="183" font-family="sans-serif" font-size="9" fill="#8b949e">HTTP</text>
+
+      <!-- Web -> API -->
+      <line x1="338" y1="190" x2="381" y2="187" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="340" y="180" font-family="sans-serif" font-size="9" fill="#8b949e">fetch()</text>
+
+      <!-- API -> Postgres -->
+      <line x1="548" y1="190" x2="596" y2="196" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="551" y="183" font-family="sans-serif" font-size="9" fill="#8b949e">SQL / Drizzle</text>
+
+      <!-- API -> USDA (dashed red) -->
+      <line x1="548" y1="165" x2="856" y2="118" stroke="#f85149" stroke-width="1.5" stroke-dasharray="5,2" marker-end="url(#arr-ext)"/>
+      <text x="700" y="138" font-family="sans-serif" font-size="9" fill="#f85149">HTTP + optional API key</text>
+
+      <!-- Postgres cache-aside return -->
+      <line x1="598" y1="210" x2="550" y2="206" stroke="#56d364" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#arr-cache)"/>
+      <text x="556" y="226" font-family="sans-serif" font-size="9" fill="#56d364">cache-aside</text>
+
+      <!-- API imports nutrition-engine -->
+      <line x1="452" y1="253" x2="410" y2="338" stroke="#d2a8ff" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#arr-lib)"/>
+      <text x="398" y="304" font-family="sans-serif" font-size="9" fill="#d2a8ff">imports</text>
+
+      <!-- API imports shared -->
+      <line x1="490" y1="253" x2="545" y2="338" stroke="#8b949e" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#arr)"/>
+
+      <!-- Web imports shared -->
+      <line x1="295" y1="240" x2="530" y2="338" stroke="#8b949e" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#arr)"/>
+
+      <!-- GH Actions -> Docker Hub -->
+      <line x1="720" y1="456" x2="858" y2="240" stroke="#8b949e" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+    </svg>
+  </div>
+  <script>
+  (function(){
+    var svg = document.getElementById('archSvg');
+    var wrap = document.getElementById('archWrap');
+    var scale = 1, tx = 0, ty = 0;
+    var drag = false, sx, sy, stx, sty;
+
+    function apply(){
+      svg.style.transform = 'translate('+tx+'px,'+ty+'px) scale('+scale+')';
+      svg.style.transformOrigin = '0 0';
+    }
+    function fit(){
+      var ww = wrap.clientWidth, wh = wrap.clientHeight;
+      scale = Math.min(ww/1020, wh/510) * 0.95;
+      tx = (ww - 1020*scale)/2;
+      ty = (wh - 510*scale)/2;
+      apply();
+    }
+    window.archFit = fit;
+    window.archZoom = function(f){
+      var cx = wrap.clientWidth/2, cy = wrap.clientHeight/2;
+      tx = cx - (cx-tx)*f; ty = cy - (cy-ty)*f;
+      scale = Math.max(0.15, Math.min(scale*f, 5));
+      apply();
+    };
+    wrap.addEventListener('wheel', function(e){
+      e.preventDefault();
+      var r = wrap.getBoundingClientRect();
+      var cx = e.clientX-r.left, cy = e.clientY-r.top;
+      var f = e.deltaY < 0 ? 1.1 : 0.9;
+      tx = cx-(cx-tx)*f; ty = cy-(cy-ty)*f;
+      scale = Math.max(0.15, Math.min(scale*f, 5));
+      apply();
+    }, {passive:false});
+    wrap.addEventListener('pointerdown', function(e){ drag=true; sx=e.clientX; sy=e.clientY; stx=tx; sty=ty; wrap.setPointerCapture(e.pointerId); });
+    wrap.addEventListener('pointermove', function(e){ if(!drag) return; tx=stx+(e.clientX-sx); ty=sty+(e.clientY-sy); apply(); });
+    wrap.addEventListener('pointerup', function(){ drag=false; });
+    fit();
+  })();
+  </script>
+</section>
+
+<!-- ======================================================= COMPONENT: API -->
+<section id="comp-api">
+  <h2>Component: API</h2>
+  <div class="badges">
+    <span class="badge badge-orange">Fastify 5.8</span>
+    <span class="badge badge-gray">Node.js &ge;20 ESM</span>
+    <span class="badge badge-purple">Drizzle ORM 0.45</span>
+    <span class="badge badge-green">PostgreSQL</span>
+    <span class="badge badge-gray">Pino 9.6</span>
+    <span class="badge badge-blue">Zod 3.24</span>
+    <span class="badge badge-gray">Docker</span>
+  </div>
+
+  <p>REST API backend. Handles all data persistence, USDA food data proxying (with cache-aside via PostgreSQL), and serves as the single point of truth for workspace state. All application routes are prefixed <code>/api/v1</code>; the health route lives at <code>/healthz</code> without a prefix. Runs migrations automatically on startup.</p>
+
+  <h3>Docker Configuration</h3>
+  <table>
+    <thead><tr><th>Property</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td>Docker image</td><td><code>justin8912/meal-tracking-website-api:latest</code></td></tr>
+      <tr><td>Container port</td><td>3000</td></tr>
+      <tr><td>Published port</td><td>8100</td></tr>
+      <tr><td>Dockerfile</td><td><code>apps/api/Dockerfile</code></td></tr>
+      <tr><td>Startup dependency</td><td>Waits for <code>postgres</code> health check to pass before starting</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Environment Variables</h3>
+  <table>
+    <thead><tr><th>Variable</th><th>Example / Default</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>DATABASE_URL</code></td><td><em>composed at runtime</em></td><td>PostgreSQL connection string. Redacted from all Pino log output.</td></tr>
+      <tr><td><code>POSTGRES_USER</code></td><td><em>from .env</em></td><td>DB username</td></tr>
+      <tr><td><code>POSTGRES_PASSWORD</code></td><td><em>from .env</em></td><td>DB password. Redacted from logs.</td></tr>
+      <tr><td><code>POSTGRES_DB</code></td><td><em>from .env</em></td><td>Database name</td></tr>
+      <tr><td><code>USDA_API_KEY</code></td><td><em>optional</em></td><td>USDA FoodData Central API key. Kept server-side only — never forwarded to the frontend. Redacted from logs.</td></tr>
+      <tr><td><code>LOG_LEVEL</code></td><td><code>info</code></td><td>Pino log level: <code>fatal|error|warn|info|debug|trace|silent</code></td></tr>
+      <tr><td><code>API_PORT</code></td><td><code>8100</code></td><td>Port the server binds to</td></tr>
+      <tr><td><code>CORS_ORIGIN</code></td><td><code>*</code></td><td>Allowed CORS origins. Tighten to a specific host in production.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>API Endpoints</h3>
+  <div class="callout info">No OpenAPI spec file was found in the repo. The table below is derived from the Fastify route handlers in <code>apps/api/src/routes/</code>. All routes except <code>/healthz</code> are prefixed <code>/api/v1</code>.</div>
+  <table>
+    <thead>
+      <tr><th>Method</th><th>Path</th><th>Purpose</th><th>Data Stores</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/healthz</code></td>
+        <td>Liveness + DB connectivity check</td>
+        <td>PostgreSQL (ping)</td>
+        <td>200 <code>{status:"ok"}</code> or 503 error envelope</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/api/v1/units</code></td>
+        <td>List all unit conversion records</td>
+        <td>PostgreSQL &mdash; <code>units</code></td>
+        <td>Returns all seeded + migrated units</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/api/v1/recipes</code></td>
+        <td>List non-deleted recipes</td>
+        <td>PostgreSQL &mdash; <code>recipes</code>, <code>tags</code></td>
+        <td>Query: <code>q</code> (ILIKE), <code>mealType</code>, <code>tag</code></td>
+      </tr>
+      <tr>
+        <td><span class="method post">POST</span></td>
+        <td><code>/api/v1/recipes</code></td>
+        <td>Create recipe with ingredients and tags</td>
+        <td>PostgreSQL &mdash; <code>recipes</code>, <code>recipeIngredients</code>, <code>tags</code>, <code>recipeTags</code></td>
+        <td>Transactional. Upserts tags. Returns 201 RecipeDetail.</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/api/v1/recipes/:id</code></td>
+        <td>Get single recipe with hydrated ingredients and tags</td>
+        <td>PostgreSQL &mdash; <code>recipes</code>, <code>recipeIngredients</code>, <code>ingredients</code>, <code>tags</code></td>
+        <td>200 RecipeDetail or 404</td>
+      </tr>
+      <tr>
+        <td><span class="method put">PUT</span></td>
+        <td><code>/api/v1/recipes/:id</code></td>
+        <td>Replace recipe (transactional ingredient + tag replacement)</td>
+        <td>PostgreSQL &mdash; same tables as POST</td>
+        <td>200 RecipeDetail or 404/400</td>
+      </tr>
+      <tr>
+        <td><span class="method delete">DELETE</span></td>
+        <td><code>/api/v1/recipes/:id</code></td>
+        <td>Soft-delete recipe</td>
+        <td>PostgreSQL &mdash; <code>recipes</code> (sets <code>deletedAt</code>)</td>
+        <td>204 or 404. Data is retained; excluded from list queries.</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/api/v1/tags</code></td>
+        <td>List all workspace tags</td>
+        <td>PostgreSQL &mdash; <code>tags</code></td>
+        <td>Ordered by label</td>
+      </tr>
+      <tr>
+        <td><span class="method post">POST</span></td>
+        <td><code>/api/v1/tags</code></td>
+        <td>Upsert tag by label</td>
+        <td>PostgreSQL &mdash; <code>tags</code></td>
+        <td>Idempotent: 201 on create, 200 if already exists</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/api/v1/ingredients/search</code></td>
+        <td>USDA food search proxy</td>
+        <td>PostgreSQL &mdash; <code>usdaFoodCache</code> (read); USDA API (external, fallback)</td>
+        <td>Query: <code>q</code>. Cache-aside: DB first, then USDA. Returns normalized food array.</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/api/v1/ingredients/usda/:fdcId</code></td>
+        <td>USDA food detail proxy</td>
+        <td>PostgreSQL &mdash; <code>usdaFoodCache</code> (read/write); USDA API</td>
+        <td>Cache-aside. Stores result in <code>usdaFoodCache</code> on miss.</td>
+      </tr>
+      <tr>
+        <td><span class="method post">POST</span></td>
+        <td><code>/api/v1/ingredients/usda/:fdcId</code></td>
+        <td>Snapshot USDA food into workspace ingredient</td>
+        <td>PostgreSQL &mdash; <code>ingredients</code> (write)</td>
+        <td>Captures gramWeightPerQty + unitGramEquivalents at add-time. Returns 201 Ingredient.</td>
+      </tr>
+      <tr>
+        <td><span class="method post">POST</span></td>
+        <td><code>/api/v1/ingredients</code></td>
+        <td>Create custom ingredient</td>
+        <td>PostgreSQL &mdash; <code>ingredients</code> (write)</td>
+        <td>At least one macro required. Returns 201 Ingredient.</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/api/v1/ingredients</code></td>
+        <td>List all workspace ingredients</td>
+        <td>PostgreSQL &mdash; <code>ingredients</code></td>
+        <td>Both USDA-snapshotted and custom ingredients</td>
+      </tr>
+      <tr>
+        <td><span class="method post">POST</span></td>
+        <td><code>/api/v1/plans</code></td>
+        <td>Create plan entry</td>
+        <td>PostgreSQL &mdash; <code>planEntries</code> (write)</td>
+        <td>Accepts recipeId XOR freeform fields. Normalizes weekStart to Monday. 201 PlanEntry.</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/api/v1/plans</code></td>
+        <td>List plan entries for a week</td>
+        <td>PostgreSQL &mdash; <code>planEntries</code> LEFT JOIN <code>recipes</code></td>
+        <td>Query: <code>weekStart</code> (YYYY-MM-DD). Returns PlanEntry[] with recipe display names.</td>
+      </tr>
+      <tr>
+        <td><span class="method put">PUT</span></td>
+        <td><code>/api/v1/plans/:id</code></td>
+        <td>Update plan entry</td>
+        <td>PostgreSQL &mdash; <code>planEntries</code> (write)</td>
+        <td>Re-validates XOR. 200 PlanEntry or 404/400.</td>
+      </tr>
+      <tr>
+        <td><span class="method delete">DELETE</span></td>
+        <td><code>/api/v1/plans/:id</code></td>
+        <td>Hard-delete plan entry</td>
+        <td>PostgreSQL &mdash; <code>planEntries</code> (write)</td>
+        <td>204 or 404.</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/api/v1/plans/summary</code></td>
+        <td>Weekly macro totals</td>
+        <td>PostgreSQL &mdash; <code>planEntries</code> JOIN <code>recipes</code>, <code>recipeIngredients</code>, <code>ingredients</code></td>
+        <td>Query: <code>weekStart</code>. Recipe-backed entries only; freeform and tombstones in <code>excludedEntryIds</code>.</td>
+      </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/api/v1/plans/daily-summary</code></td>
+        <td>Per-day macro breakdown</td>
+        <td>PostgreSQL &mdash; same as summary</td>
+        <td>Query: <code>weekStart</code>. Returns 0&ndash;7 day objects: <code>{dayOfWeek, hasData, calories, proteinG, carbsG, fatG, fiberG}</code>.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Authorization</h3>
+  <div class="callout note">Single-workspace, single-user design. There is no JWT, session, or API-key authentication. All requests operate against workspace ID <code>00000000-0000-0000-0000-000000000001</code> (seeded by migration 0001, resolved by <code>workspace.ts</code>). This is appropriate for a self-hosted personal application &mdash; enforce access at the network layer.</div>
+</section>
+
+<!-- ======================================================= COMPONENT: WEB -->
+<section id="comp-web">
+  <h2>Component: Web</h2>
+  <div class="badges">
+    <span class="badge badge-teal">React 18.3</span>
+    <span class="badge badge-blue">React Router 6.30</span>
+    <span class="badge badge-blue">TanStack Query 5.62</span>
+    <span class="badge badge-gray">Vite 6.4</span>
+    <span class="badge badge-gray">Nginx</span>
+    <span class="badge badge-purple">dnd-kit 6.3</span>
+    <span class="badge badge-gray">Docker</span>
+  </div>
+
+  <p>React SPA built with Vite, served by Nginx inside Docker. The API base URL is injected at container startup via <code>env-config.js</code> into <code>window._env_</code> &mdash; there are no build-time secrets or hard-coded API URLs. Server state is managed entirely through TanStack Query hooks; the component tree never directly calls <code>fetch</code> outside of <code>src/api/client.ts</code>.</p>
+
+  <h3>Docker Configuration</h3>
+  <table>
+    <thead><tr><th>Property</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td>Docker image</td><td><code>justin8912/meal-tracking-website-ui:latest</code></td></tr>
+      <tr><td>Container port</td><td>8080</td></tr>
+      <tr><td>Published port</td><td>8090</td></tr>
+      <tr><td>Dockerfile</td><td><code>apps/web/Dockerfile</code></td></tr>
+      <tr><td>Runtime config</td><td><code>env-config.js</code> sets <code>window._env_.API_BASE_URL</code> at container startup &mdash; no build-time coupling to the API URL</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Environment Variables</h3>
+  <table>
+    <thead><tr><th>Variable</th><th>Example</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>API_BASE_URL</code></td><td><code>http://localhost:8100</code></td><td>Injected into <code>window._env_</code>; used by <code>apiFetch()</code> to prefix all API calls</td></tr>
+      <tr><td><code>WEB_PORT</code></td><td><code>8090</code></td><td>Published host port for Nginx</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Routes (React Router)</h3>
+  <table>
+    <thead><tr><th>Path</th><th>Component</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>/</code></td><td>Redirect</td><td>Redirects to <code>/planner</code></td></tr>
+      <tr><td><code>/library</code></td><td>MealLibrary</td><td>Browse, create, edit, and soft-delete recipes. Filter by meal type, tags, and full-text search. Expandable recipe cards show full ingredient and per-serving nutrition breakdown.</td></tr>
+      <tr><td><code>/planner</code></td><td>WeeklyPlanner</td><td>7-day meal grid with drag-and-drop slot assignment from a recipe palette. Shows weekly and per-day macro summaries. Recipe detail modal accessible from any planned slot.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Key UI Components</h3>
+  <table>
+    <thead><tr><th>Component</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td>RecipeEditor</td><td>Multi-line ingredient editor: quantity input, unit picker, inline ingredient search/selection</td></tr>
+      <tr><td>IngredientPicker</td><td>Debounced USDA search + custom ingredient creation; shows nutrition preview on hover</td></tr>
+      <tr><td>WeekGrid</td><td>7-column grid with dnd-kit droppable slots; handles reordering within and between slots</td></tr>
+      <tr><td>RecipePalette</td><td>Available-recipes sidebar; recipes are dnd-kit drag sources</td></tr>
+      <tr><td>MacroBar</td><td>Colored horizontal progress bars for Protein / Carbs / Fat / Fiber</td></tr>
+      <tr><td>WeeklyNutritionSummary</td><td>Aggregate weekly totals with counts of included vs. excluded (freeform/tombstone) entries</td></tr>
+      <tr><td>PlannedMealDetail</td><td>Modal: full ingredient list and per-serving macro breakdown for a single planned meal</td></tr>
+    </tbody>
+  </table>
+
+  <h3>TanStack Query Hooks</h3>
+  <table>
+    <thead><tr><th>Hook</th><th>Endpoint Hit</th></tr></thead>
+    <tbody>
+      <tr><td><code>useRecipes()</code>, <code>useRecipeDetail(id)</code></td><td>GET /api/v1/recipes, GET /api/v1/recipes/:id</td></tr>
+      <tr><td><code>useCreateRecipe()</code>, <code>useUpdateRecipe()</code>, <code>useDeleteRecipe()</code></td><td>POST/PUT/DELETE /api/v1/recipes</td></tr>
+      <tr><td><code>usePlansByWeek(weekStart)</code></td><td>GET /api/v1/plans?weekStart=&hellip;</td></tr>
+      <tr><td><code>useWeeklySummary(weekStart)</code></td><td>GET /api/v1/plans/summary</td></tr>
+      <tr><td><code>useDailySummary(weekStart)</code></td><td>GET /api/v1/plans/daily-summary</td></tr>
+      <tr><td><code>useCreatePlanEntry()</code>, <code>useUpdatePlanEntry()</code>, <code>useDeletePlanEntry()</code></td><td>POST/PUT/DELETE /api/v1/plans</td></tr>
+      <tr><td><code>useIngredients()</code>, <code>useSearchUsda(q)</code>, <code>useGetUsdaFood(fdcId)</code></td><td>GET /api/v1/ingredients, /search, /usda/:fdcId</td></tr>
+      <tr><td><code>useCreateUsdaIngredient()</code>, <code>useCreateCustomIngredient()</code></td><td>POST /api/v1/ingredients/usda/:fdcId, POST /api/v1/ingredients</td></tr>
+      <tr><td><code>useTags()</code>, <code>useCreateTag()</code></td><td>GET/POST /api/v1/tags</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ======================================================= SHARED LIBRARIES -->
+<section id="comp-shared-libs">
+  <h2>Shared Libraries</h2>
+  <p>Two npm workspace packages consumed by both the API and Web components. They are not deployable units &mdash; they ship as source into each app's build.</p>
+
+  <h3>@meal-tracking/shared</h3>
+  <p>The shared type contract between API and Web. Zod schemas are used by Fastify route handlers for request body validation; TypeScript types are inferred from the same schemas, guaranteeing consistency across the boundary.</p>
+  <table>
+    <thead><tr><th>Export</th><th>Kind</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>MealType</code>, <code>MealSlot</code></td><td>Type + Schema</td><td><code>'breakfast' | 'lunch' | 'dinner' | 'snack'</code></td></tr>
+      <tr><td><code>Nutrition</code>, <code>Micronutrient</code></td><td>Type + Schema</td><td>Macro fields plus a <code>Record&lt;string, Micronutrient&gt;</code> map. Micros stored as absolute mass (mg/mcg), never %DV.</td></tr>
+      <tr><td><code>Ingredient</code>, <code>Recipe</code>, <code>RecipeDetail</code></td><td>Type + Schema</td><td>Core recipe library domain objects</td></tr>
+      <tr><td><code>RecipeInput</code></td><td>Type + Schema</td><td>Write payload for creating/updating recipes; includes ingredient lines and tag labels</td></tr>
+      <tr><td><code>PlanEntry</code>, <code>PlanEntryInput</code></td><td>Type + Schema</td><td>Planner types. <code>PlanEntryInput</code> enforces the recipeId XOR freeformTitle constraint via Zod discriminated union.</td></tr>
+      <tr><td><code>WeeklySummary</code></td><td>Type + Schema</td><td>Weekly macro totals with <code>countedEntryIds</code> and <code>excludedEntryIds</code> lists</td></tr>
+      <tr><td><code>ErrorEnvelope</code></td><td>Type + Schema</td><td>Universal API error shape: <code>{ error: { code, message } }</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>@meal-tracking/nutrition-engine</h3>
+  <p>A pure computation library with zero runtime dependencies. No I/O, no <code>Date</code>, no side effects. Implements all nutrition math: unit-to-gram resolution, per-ingredient macro scaling, full-precision accumulation, and display rounding.</p>
+  <table>
+    <thead><tr><th>Export</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>toGrams(quantity, unitCode, ingredient)</code></td><td>Resolves a usage quantity to grams using the ingredient's <code>gramEquivalents</code> density map and <code>gramWeightPerQty</code>. Returns <code>{ resolved: true, grams }</code> or <code>{ resolved: false, reason }</code>.</td></tr>
+      <tr><td><code>computeRecipeNutrition(lines, servings)</code></td><td>Full-precision accumulation across all ingredient lines. Returns <code>{ total, perServing, completeness }</code>. Absent macros are never zero-filled; they are flagged in <code>completeness.missing</code>.</td></tr>
+      <tr><td><code>formatNutrition(nutrition)</code></td><td>Single rounding boundary for display. Returns <code>FormattedNutrition</code> (a distinct type to prevent re-summing already-rounded values).</td></tr>
+    </tbody>
+  </table>
+  <div class="callout info"><strong>Precision invariant:</strong> No rounding occurs until <code>formatNutrition</code> is called. All intermediate accumulation uses full floating-point precision to prevent compounding rounding error across multiple ingredients. This is why <code>FormattedNutrition</code> is a separate type from <code>Nutrition</code>.</div>
+</section>
+
+<!-- ======================================================= PERMISSIONS -->
+<section id="permissions">
+  <h2>Permissions</h2>
+  <div class="callout note">This is a single-workspace personal application. There is no authentication layer, no JWT validation, and no role-based access control. Access is enforced entirely at the network level (firewall / reverse proxy).</div>
+  <table>
+    <thead>
+      <tr><th>Route Group</th><th>Auth Required</th><th>Workspace Scoping</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>All <code>/api/v1/*</code> routes</td>
+        <td>None</td>
+        <td>All reads and writes are automatically scoped to workspace ID <code>00000000-0000-0000-0000-000000000001</code>, resolved in <code>src/workspace.ts</code></td>
+        <td>Single-tenant by design; no multi-user support</td>
+      </tr>
+      <tr>
+        <td><code>/healthz</code></td>
+        <td>None</td>
+        <td>N/A</td>
+        <td>Returns <code>{status:"ok"}</code> only; no user data exposed</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="callout warn"><strong>Production exposure:</strong> If deploying to a public host, restrict ports 8090 (Web) and 8100 (API) at the firewall or add Nginx basic auth / VPN requirement. The application itself performs no credential checks.</div>
+</section>
+
+<!-- ======================================================= HOW TO USE -->
+<section id="how-to-use">
+  <h2>How to Use</h2>
+  <h3>Start the application</h3>
+  <ol class="steps">
+    <li>Copy <code>.env.example</code> to <code>.env</code>. Set <code>POSTGRES_USER</code>, <code>POSTGRES_PASSWORD</code>, <code>POSTGRES_DB</code>, and optionally <code>USDA_API_KEY</code>.</li>
+    <li>Run <code>docker compose up --build</code>. Compose starts PostgreSQL first (waits for the <code>pg_isready</code> health check), then starts the API (which runs all pending Drizzle migrations on boot), then the Web container.</li>
+    <li>Open <code>http://localhost:8090</code>. The weekly planner is the default view.</li>
+    <li>Go to <code>/library</code> to build your recipe library. Click &ldquo;Add Recipe&rdquo;, search for ingredients via the USDA database or create custom ones with manual macros, and save.</li>
+    <li>Return to <code>/planner</code>. Drag recipes from the right-hand palette onto any day/meal slot. Weekly and daily macro summaries update in real time.</li>
+  </ol>
+
+  <h3>Run migrations manually</h3>
+  <pre><code><span class="kw">docker compose exec</span> <span class="ty">api</span> <span class="str">npm run migrate</span></code></pre>
+
+  <h3>Run tests and lint</h3>
+  <pre><code><span class="kw">npm run test</span>      <span class="cm"># vitest across all workspaces</span>
+<span class="kw">npm run lint</span>      <span class="cm"># tsc --noEmit + ESLint across all workspaces</span></code></pre>
+
+  <h3>Run in development mode (no Docker)</h3>
+  <pre><code><span class="cm"># Start Postgres separately, then:</span>
+<span class="kw">cd</span> apps/api &amp;&amp; <span class="str">npm run dev</span>   <span class="cm"># tsx watch, hot-reload</span>
+<span class="kw">cd</span> apps/web &amp;&amp; <span class="str">npm run dev</span>   <span class="cm"># vite dev server with HMR</span></code></pre>
+</section>
+
+<!-- ======================================================= DATA MODEL -->
+<section id="data-model">
+  <h2>Data Model</h2>
+  <p>PostgreSQL 16. All tables live in the default schema. Managed by Drizzle Kit; migrations are in <code>apps/api/drizzle/</code> (0001&ndash;0008).</p>
+
+  <h3>workspaces</h3>
+  <table>
+    <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>UUID PK</td><td>Fixed value <code>00000000-0000-0000-0000-000000000001</code> seeded by migration 0001. All user data FKs here.</td></tr>
+      <tr><td><code>name</code></td><td>text</td><td>Display name</td></tr>
+      <tr><td><code>created_at</code></td><td>timestamp</td><td></td></tr>
+    </tbody>
+  </table>
+
+  <h3>units</h3>
+  <table>
+    <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>code</code></td><td>text PK</td><td>Seeded values: <code>g</code>, <code>tsp</code>, <code>tbsp</code>, <code>fl oz</code>, <code>cup</code>, <code>quart</code>, <code>qty</code>, <code>oz</code></td></tr>
+      <tr><td><code>label</code></td><td>text</td><td>Human-readable display name (e.g. &ldquo;tablespoon&rdquo;)</td></tr>
+      <tr><td><code>gramsPerUnit</code></td><td>numeric (nullable)</td><td>Gram conversion factor. Null for <code>qty</code> (per-ingredient via <code>gramWeightPerQty</code>) and <code>g</code> (identity). <code>oz</code> = 28.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>ingredients</h3>
+  <table>
+    <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>UUID PK</td><td></td></tr>
+      <tr><td><code>workspace_id</code></td><td>UUID FK &rarr; workspaces</td><td></td></tr>
+      <tr><td><code>name</code></td><td>text</td><td></td></tr>
+      <tr><td><code>source</code></td><td>enum</td><td><span class="status-pill pill-blue">usda</span> &nbsp; <span class="status-pill pill-blue">custom</span></td></tr>
+      <tr><td><code>fdcId</code></td><td>text (nullable)</td><td>USDA food ID. Partial unique index on <code>(workspace_id, fdcId) WHERE fdcId IS NOT NULL</code> &mdash; prevents duplicate snapshots of the same USDA food.</td></tr>
+      <tr><td><code>referenceGrams</code></td><td>numeric default 100</td><td>The gram quantity that all nutrition values are expressed relative to</td></tr>
+      <tr><td><code>gramWeightPerQty</code></td><td>numeric (nullable)</td><td>Grams per one &ldquo;qty&rdquo; unit for this ingredient (e.g. 1 egg &asymp; 50 g). Null = &ldquo;qty&rdquo; unit unavailable.</td></tr>
+      <tr><td><code>unitGramEquivalents</code></td><td>JSONB</td><td><code>{ unitCode: grams }</code> density overrides per ingredient (e.g. <code>{ "cup": 240 }</code>)</td></tr>
+      <tr><td><code>calories</code>, <code>proteinG</code>, <code>carbsG</code>, <code>fatG</code>, <code>fiberG</code></td><td>numeric (nullable)</td><td>Per <code>referenceGrams</code>. Null = genuinely unmeasured; <strong>never zero-filled</strong> &mdash; absent values are surfaced via the completeness descriptor.</td></tr>
+      <tr><td><code>micronutrients</code></td><td>JSONB</td><td><code>{ nutrientName: { amount, unit } }</code>. Absolute mass (mg/mcg), never %DV.</td></tr>
+      <tr><td><code>preferredUnit</code></td><td>text default <code>'g'</code></td><td>Default unit shown in the ingredient picker UI</td></tr>
+      <tr><td><code>created_at</code>, <code>updated_at</code></td><td>timestamp</td><td></td></tr>
+    </tbody>
+  </table>
+
+  <h3>recipes</h3>
+  <table>
+    <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>UUID PK</td><td></td></tr>
+      <tr><td><code>workspace_id</code></td><td>UUID FK</td><td></td></tr>
+      <tr><td><code>name</code></td><td>text</td><td></td></tr>
+      <tr><td><code>mealType</code></td><td>enum</td><td><span class="status-pill pill-green">breakfast</span> <span class="status-pill pill-green">lunch</span> <span class="status-pill pill-green">dinner</span> <span class="status-pill pill-green">snack</span></td></tr>
+      <tr><td><code>servings</code></td><td>integer CHECK &ge;1</td><td>Number of servings the recipe yields; used to divide totals into per-serving nutrition</td></tr>
+      <tr><td><code>notes</code></td><td>text (nullable)</td><td>Free-text notes</td></tr>
+      <tr><td><code>sourceLink</code></td><td>text (nullable)</td><td>URL to the original recipe source</td></tr>
+      <tr><td><code>deletedAt</code></td><td>timestamp (nullable)</td><td>Soft-delete. Non-null = logically deleted. List queries filter with <code>WHERE deletedAt IS NULL</code>.</td></tr>
+      <tr><td><code>created_at</code>, <code>updated_at</code></td><td>timestamp</td><td></td></tr>
+    </tbody>
+  </table>
+
+  <h3>recipeIngredients</h3>
+  <table>
+    <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>UUID PK</td><td></td></tr>
+      <tr><td><code>recipeId</code></td><td>UUID FK &rarr; recipes ON DELETE CASCADE</td><td></td></tr>
+      <tr><td><code>ingredientId</code></td><td>UUID FK &rarr; ingredients</td><td></td></tr>
+      <tr><td><code>quantity</code></td><td>numeric CHECK &gt;0</td><td>Amount in the given unit</td></tr>
+      <tr><td><code>unitCode</code></td><td>text FK &rarr; units.code</td><td></td></tr>
+      <tr><td><code>position</code></td><td>integer default 0</td><td>Display ordering within the recipe</td></tr>
+    </tbody>
+  </table>
+
+  <h3>tags &amp; recipeTags</h3>
+  <table>
+    <thead><tr><th>Table</th><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>tags</td><td><code>id</code></td><td>UUID PK</td><td></td></tr>
+      <tr><td>tags</td><td><code>workspace_id</code></td><td>UUID FK</td><td></td></tr>
+      <tr><td>tags</td><td><code>label</code></td><td>text</td><td>UNIQUE(workspace_id, label) &mdash; tags are upserted by label</td></tr>
+      <tr><td>recipeTags</td><td><code>recipeId</code>, <code>tagId</code></td><td>UUID FK (CASCADE on both)</td><td>Composite PK; both cascades on delete</td></tr>
+    </tbody>
+  </table>
+
+  <h3>usdaFoodCache</h3>
+  <table>
+    <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>fdcId</code></td><td>text PK</td><td>USDA FoodData Central food ID</td></tr>
+      <tr><td><code>payload</code></td><td>JSONB</td><td>Raw USDA API response body at time of fetch</td></tr>
+      <tr><td><code>fetchedAt</code></td><td>timestamp</td><td>When the record was retrieved from USDA. Entries are permanent &mdash; there is no TTL expiry.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>planEntries</h3>
+  <table>
+    <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>UUID PK</td><td></td></tr>
+      <tr><td><code>workspace_id</code></td><td>UUID FK</td><td></td></tr>
+      <tr><td><code>weekStartDate</code></td><td>DATE</td><td>Always a Monday. Normalized server-side using UTC DATE arithmetic &mdash; the client never needs to compute this.</td></tr>
+      <tr><td><code>dayOfWeek</code></td><td>integer 0&ndash;6</td><td>0 = Monday, 6 = Sunday</td></tr>
+      <tr><td><code>mealSlot</code></td><td>enum</td><td><span class="status-pill pill-green">breakfast</span> <span class="status-pill pill-green">lunch</span> <span class="status-pill pill-green">dinner</span> <span class="status-pill pill-green">snack</span></td></tr>
+      <tr><td><code>position</code></td><td>integer default 0</td><td>Display ordering within a single day+slot</td></tr>
+      <tr><td><code>recipeId</code></td><td>UUID FK &rarr; recipes ON DELETE SET NULL</td><td>Nullable. When a recipe is deleted, this becomes null &mdash; creating a &ldquo;tombstone&rdquo; entry.</td></tr>
+      <tr><td><code>freeformTitle</code></td><td>text (nullable)</td><td>XOR with <code>recipeId</code> &mdash; enforced by a database CHECK constraint</td></tr>
+      <tr><td><code>freeformDescription</code></td><td>text (nullable)</td><td></td></tr>
+      <tr><td><code>freeformLink</code></td><td>text (nullable)</td><td>External URL for freeform entries</td></tr>
+      <tr><td><code>created_at</code>, <code>updated_at</code></td><td>timestamp</td><td></td></tr>
+    </tbody>
+  </table>
+  <div class="callout info"><strong>Tombstone entries:</strong> When a recipe is soft-deleted, plan entries with that <code>recipeId</code> have it set to NULL by the <code>ON DELETE SET NULL</code> cascade. These tombstones appear in <code>WeeklySummary.excludedEntryIds</code> and are excluded from all macro aggregations.</div>
+</section>
+
+<!-- ======================================================= MONITORING -->
+<section id="monitoring">
+  <h2>Monitoring</h2>
+  <div class="callout info">This is a self-hosted personal project. There is no cloud monitoring (New Relic, PagerDuty, CloudWatch, Grafana). Observability is through structured JSON logs (Pino) and the built-in health endpoint.</div>
+
+  <h3>Health Endpoint</h3>
+  <table>
+    <thead><tr><th>Endpoint</th><th>Method</th><th>Success</th><th>Failure</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>http://&lt;host&gt;:8100/healthz</code></td>
+        <td><span class="method get">GET</span></td>
+        <td>200 <code>{ "status": "ok" }</code></td>
+        <td>503 <code>ErrorEnvelope</code> (DB unreachable)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Structured Logging (Pino)</h3>
+  <p>All API logs emit as JSON to stdout. The following values are automatically redacted before any log line is written:</p>
+  <table>
+    <thead><tr><th>Redacted Key</th><th>Reason</th></tr></thead>
+    <tbody>
+      <tr><td><code>DATABASE_URL</code></td><td>Contains DB credentials</td></tr>
+      <tr><td><code>USDA_API_KEY</code></td><td>Third-party API credential</td></tr>
+    </tbody>
+  </table>
+  <p>Control log verbosity with the <code>LOG_LEVEL</code> environment variable. Stream logs in real time:</p>
+  <pre><code><span class="kw">docker compose logs</span> <span class="ty">api</span> <span class="prop">-f</span>   <span class="cm"># API structured JSON logs</span>
+<span class="kw">docker compose logs</span> <span class="ty">web</span> <span class="prop">-f</span>   <span class="cm"># Nginx access logs</span></code></pre>
+
+  <h3>PostgreSQL Health Check (Docker Compose)</h3>
+  <p>The <code>postgres</code> service is configured with a <code>pg_isready</code> health check. The <code>api</code> service has <code>depends_on: postgres: condition: service_healthy</code> &mdash; the API never starts before the database is accepting connections.</p>
+</section>
+
+<!-- ======================================================= ENVIRONMENTS -->
+<section id="environments">
+  <h2>Environments</h2>
+  <div class="card-row cols-2">
+    <div class="card">
+      <h4>Local Development</h4>
+      <p>Run via <code>docker compose up --build</code>. All services on the local Docker bridge network. Config from <code>.env</code>.</p>
+      <table style="margin-top:10px">
+        <thead><tr><th>Service</th><th>URL</th></tr></thead>
+        <tbody>
+          <tr><td>Web SPA</td><td><code>http://localhost:8090</code></td></tr>
+          <tr><td>API</td><td><code>http://localhost:8100</code></td></tr>
+          <tr><td>Health</td><td><code>http://localhost:8100/healthz</code></td></tr>
+          <tr><td>PostgreSQL</td><td><code>localhost:5432</code> (Docker-internal)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h4>Production (Self-Hosted)</h4>
+      <p>Same Compose topology on a self-hosted server. Images are pulled from Docker Hub, built and pushed by GitHub Actions on every push to <code>main</code>.</p>
+      <table style="margin-top:10px">
+        <thead><tr><th>Component</th><th>Image</th></tr></thead>
+        <tbody>
+          <tr><td>API</td><td><code>justin8912/meal-tracking-website-api:latest</code></td></tr>
+          <tr><td>Web</td><td><code>justin8912/meal-tracking-website-ui:latest</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3>CI/CD Pipeline</h3>
+  <table>
+    <thead><tr><th>Trigger</th><th>Workflow file</th><th>Steps</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Push to <code>main</code> or manual <code>workflow_dispatch</code></td>
+        <td><code>.github/workflows/deploy-application.yaml</code></td>
+        <td>
+          1. Checkout &nbsp;
+          2. Log in to Docker Hub (secret: <code>DOCKERHUB_PAT</code>) &nbsp;
+          3. Build &amp; push <code>apps/web/Dockerfile</code> &rarr; <code>justin8912/meal-tracking-website-ui:latest</code> &nbsp;
+          4. Build &amp; push <code>apps/api/Dockerfile</code> &rarr; <code>justin8912/meal-tracking-website-api:latest</code>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- no .cai PRR documents found -->
+</section>
+
+<footer>
+  <p>Generated from <a href="https://github.com/Justin8912/meal-tracking-website/commit/7ba0264c6a7344951cfcb95d5dfa4a0e41f91b57" target="_blank"><code>7ba0264</code></a> &nbsp;&middot;&nbsp; 2026-06-16 &nbsp;&middot;&nbsp; meal-tracking-website system overview</p>
+</footer>
+
+</div>
+</body>
+</html>
