@@ -143,8 +143,8 @@ export const mealSlotSchema = z.enum([
 
 /**
  * POST /plans request body (FR-1, AD-3, S-1). `weekStart` is any date in the
- * target week as YYYY-MM-DD; the server normalizes it to the Monday DATE (AD-2,
- * S-4). `dayOfWeek` is pinned to 0..6 (Monday..Sunday) and `mealSlot` to the
+ * target week as YYYY-MM-DD; the server normalizes it to the Sunday DATE (AD-2,
+ * S-4). `dayOfWeek` is pinned to 0..6 (Sunday..Saturday) and `mealSlot` to the
  * four-slot enum.
  *
  * The `.refine()` enforces the recipe/freeform XOR (AD-3): exactly one of
@@ -154,7 +154,7 @@ export const mealSlotSchema = z.enum([
  */
 export const planEntryInputSchema = z
   .object({
-    // A calendar date, not a timestamp; the server derives the Monday from it.
+    // A calendar date, not a timestamp; the server derives the Sunday from it.
     weekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'weekStart must be YYYY-MM-DD'),
     dayOfWeek: z.number().int().min(0).max(6),
     mealSlot: mealSlotSchema,

@@ -170,9 +170,9 @@ export type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack';
  * the Monday DATE (AD-2, S-4). `dayOfWeek` is 0 (Monday) .. 6 (Sunday).
  */
 export interface PlanEntryInput {
-  /** Any date in the target week (YYYY-MM-DD); normalized to the Monday server-side. */
+  /** Any date in the target week (YYYY-MM-DD); normalized to the Sunday server-side. */
   weekStart: string;
-  /** 0 (Monday) .. 6 (Sunday). */
+  /** 0 (Sunday) .. 6 (Saturday). */
   dayOfWeek: number;
   mealSlot: MealSlot;
   /** Optional ordering within a day/slot; defaults to 0 server-side. */
@@ -194,9 +194,9 @@ export interface PlanEntryInput {
  */
 export interface PlanEntry {
   id: string;
-  /** The Monday DATE of the week (YYYY-MM-DD), computed server-side (AD-2). */
+  /** The Sunday DATE of the week (YYYY-MM-DD), computed server-side (AD-2). */
   weekStartDate: string;
-  /** 0 (Monday) .. 6 (Sunday). */
+  /** 0 (Sunday) .. 6 (Saturday). */
   dayOfWeek: number;
   mealSlot: MealSlot;
   position: number;

@@ -43,20 +43,18 @@ const planQuerySchema = z.object({
 });
 
 /**
- * Normalize any YYYY-MM-DD date to the Monday DATE of its week (AD-2, S-4).
+ * Normalize any YYYY-MM-DD date to the Sunday DATE of its week (AD-2, S-4).
  *
  * The date is parsed at UTC midnight so the computation is timezone-independent
  * (a DATE has no time/zone); JS getUTCDay() returns 0 (Sunday)..6 (Saturday),
- * which we remap to an offset back to Monday. The result is re-serialized as
- * YYYY-MM-DD. This never produces a YYYY-Www string, so the prototype's
- * year-boundary bug (F-11) cannot occur.
+ * which maps directly to the days-since-Sunday offset. The result is
+ * re-serialized as YYYY-MM-DD. This never produces a YYYY-Www string, so the
+ * prototype's year-boundary bug (F-11) cannot occur.
  */
-export function normalizeToMonday(isoDate: string): string {
+export function normalizeToSunday(isoDate: string): string {
   const d = new Date(`${isoDate}T00:00:00.000Z`);
-  const dow = d.getUTCDay(); // 0=Sunday..6=Saturday
-  // Days to subtract to reach Monday: Sunday(0) -> 6, Monday(1) -> 0, etc.
-  const daysSinceMonday = (dow + 6) % 7;
-  d.setUTCDate(d.getUTCDate() - daysSinceMonday);
+  const dow = d.getUTCDay(); // 0=Sunday..6=Saturday — offset is already days since Sunday
+  d.setUTCDate(d.getUTCDate() - dow);
   return d.toISOString().slice(0, 10);
 }
 
@@ -290,7 +288,7 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
     const input = parsed.data;
     const workspaceId = await resolveWorkspaceId(db);
     // Derive the Monday server-side from whatever in-week date was sent (AD-2).
-    const weekStartDate = normalizeToMonday(input.weekStart);
+    const weekStartDate = normalizeToSunday(input.weekStart);
 
     let createdId: string;
     try {
@@ -368,7 +366,7 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
     }
 
     // Derive the Monday server-side from whatever in-week date was sent (AD-2).
-    const weekStartDate = normalizeToMonday(input.weekStart);
+    const weekStartDate = normalizeToSunday(input.weekStart);
 
     try {
       // The XOR guarantees exactly one of recipeId/freeformTitle is set; fully
@@ -456,7 +454,7 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
 
     const workspaceId = await resolveWorkspaceId(db);
     // Normalize to the Monday so any in-week date returns the right week (AD-2).
-    const weekStartDate = normalizeToMonday(parsedQuery.data.weekStart);
+    const weekStartDate = normalizeToSunday(parsedQuery.data.weekStart);
 
     const summary = await computeWeeklySummary(db, workspaceId, weekStartDate);
     // Validate the response against the shared schema before sending (S-1).
@@ -479,7 +477,7 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
     }
 
     const workspaceId = await resolveWorkspaceId(db);
-    const weekStartDate = normalizeToMonday(parsedQuery.data.weekStart);
+    const weekStartDate = normalizeToSunday(parsedQuery.data.weekStart);
 
     // Fetch all entries for the week (same shape as the summary query).
     const entries = await db
@@ -600,7 +598,7 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
 
     const workspaceId = await resolveWorkspaceId(db);
     // Normalize to the Monday so any in-week date returns the right week (AD-2).
-    const weekStartDate = normalizeToMonday(parsedQuery.data.weekStart);
+    const weekStartDate = normalizeToSunday(parsedQuery.data.weekStart);
 
     // LEFT JOIN recipes so every plan entry carries the recipe's display name.
     // A tombstone entry (recipe deleted → recipeId NULL) returns null for the

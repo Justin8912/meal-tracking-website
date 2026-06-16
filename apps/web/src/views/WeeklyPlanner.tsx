@@ -40,19 +40,19 @@ import { WeeklyNutritionSummary } from '../components/WeeklyNutritionSummary.js'
  * A failed week load shows an error + retry, not a blank/stale week (AC-3.4).
  */
 
-/** Day labels in grid order: Monday (dayOfWeek 0) .. Sunday (dayOfWeek 6). */
+/** Day labels in grid order: Sunday (dayOfWeek 0) .. Saturday (dayOfWeek 6). */
 const DAY_LABELS = [
+  'Sunday',
   'Monday',
   'Tuesday',
   'Wednesday',
   'Thursday',
   'Friday',
   'Saturday',
-  'Sunday',
 ] as const;
 
 /** Short abbreviations for the column headers. */
-const DAY_ABBR = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 /** The three primary meal slots shown in the normal grid view. */
 const GRID_SLOTS: MealSlot[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -75,16 +75,15 @@ const SLOT_COLORS: Record<string, string> = {
 };
 
 /**
- * The Monday DATE (YYYY-MM-DD) of the week containing `from`, computed at UTC so
+ * The Sunday DATE (YYYY-MM-DD) of the week containing `from`, computed at UTC so
  * it is timezone-independent and matches the server's normalization (AD-2).
  */
-function mondayOf(from: Date): string {
+function sundayOf(from: Date): string {
   const d = new Date(
     Date.UTC(from.getFullYear(), from.getMonth(), from.getDate()),
   );
-  const dow = d.getUTCDay(); // 0=Sunday..6=Saturday
-  const daysSinceMonday = (dow + 6) % 7;
-  d.setUTCDate(d.getUTCDate() - daysSinceMonday);
+  const dow = d.getUTCDay(); // 0=Sunday..6=Saturday — offset is already days since Sunday
+  d.setUTCDate(d.getUTCDate() - dow);
   return d.toISOString().slice(0, 10);
 }
 
@@ -102,14 +101,14 @@ function entryLabel(entry: PlanEntry): string {
 }
 
 /**
- * Given a weekStart ISO string (YYYY-MM-DD Monday), compute the 7 Date objects
- * for Mon..Sun of that week in UTC.
+ * Given a weekStart ISO string (YYYY-MM-DD Sunday), compute the 7 Date objects
+ * for Sun..Sat of that week in UTC.
  */
 function weekDates(weekStart: string): Date[] {
-  const monday = new Date(`${weekStart}T00:00:00.000Z`);
+  const sunday = new Date(`${weekStart}T00:00:00.000Z`);
   return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setUTCDate(monday.getUTCDate() + i);
+    const d = new Date(sunday);
+    d.setUTCDate(sunday.getUTCDate() + i);
     return d;
   });
 }
@@ -829,11 +828,11 @@ function MobileDayPanel({
 }
 
 export function WeeklyPlanner(): JSX.Element {
-  // The active week's Monday DATE is the ONLY navigation state (AD-2). It starts
+  // The active week's Sunday DATE is the ONLY navigation state (AD-2). It starts
   // at the current week and shifts by +/- 7 days via shiftWeek for back/forward
   // navigation; the displayed week is derived entirely from the week-keyed
   // server query below, so no plan data lives in component state (AC-3.3).
-  const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
+  const [weekStart, setWeekStart] = useState(() => sundayOf(new Date()));
   const [editMode, setEditMode] = useState(false);
   const [mobileDayIdx, setMobileDayIdx] = useState(() => todayDayIndex());
   const windowWidth = useWindowWidth();
@@ -858,12 +857,12 @@ export function WeeklyPlanner(): JSX.Element {
     byDay.set(entry.dayOfWeek, list);
   }
 
-  // Compute the current week's Monday offset relative to now for the label.
-  const todayMonday = mondayOf(new Date());
+  // Compute the current week's Sunday offset relative to now for the label.
+  const todaySunday = sundayOf(new Date());
   const msPerWeek = 7 * 24 * 60 * 60 * 1000;
   const weekOffset = Math.round(
     (new Date(`${weekStart}T00:00:00.000Z`).getTime() -
-      new Date(`${todayMonday}T00:00:00.000Z`).getTime()) /
+      new Date(`${todaySunday}T00:00:00.000Z`).getTime()) /
       msPerWeek,
   );
 
@@ -931,7 +930,7 @@ export function WeeklyPlanner(): JSX.Element {
                 type="button"
                 className="week-nav__today"
                 onClick={() => {
-                  setWeekStart(todayMonday);
+                  setWeekStart(todaySunday);
                   setMobileDayIdx(todayDayIndex());
                 }}
               >
