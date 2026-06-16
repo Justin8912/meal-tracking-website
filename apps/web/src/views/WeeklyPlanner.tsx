@@ -649,8 +649,8 @@ function useWindowWidth(): number {
 }
 
 function todayDayIndex(): number {
-  const dow = new Date().getUTCDay(); // 0=Sun..6=Sat
-  return (dow + 6) % 7; // Mon=0..Sun=6
+  // getUTCDay() returns 0=Sun..6=Sat, which matches the Sunday-start dayOfWeek directly.
+  return new Date().getUTCDay();
 }
 
 function MobileDayContent({
