@@ -786,7 +786,11 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
       .select({
         id: planEntries.id,
         weekStartDate: planEntries.weekStartDate,
+        dayOfWeek: planEntries.dayOfWeek,
         recipeId: planEntries.recipeId,
+        ingredientId: planEntries.ingredientId,
+        ingredientQuantity: planEntries.ingredientQuantity,
+        ingredientUnitCode: planEntries.ingredientUnitCode,
       })
       .from(planEntries)
       .where(
@@ -851,29 +855,78 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
       }
     }
 
-    // Accumulate per-week totals (recipe-backed entries only on this branch).
-    const totalsMap = new Map<string, Nutrition & { hasData: boolean }>();
+    // Batch-load ingredient rows for ingredient-backed entries.
+    const ingIdSet = new Set(
+      inRange.map((e) => e.ingredientId).filter(Boolean) as string[],
+    );
+    const ingredientById = new Map<string, IngredientRow>();
+    if (ingIdSet.size > 0) {
+      const ingRows = await db
+        .select()
+        .from(ingredients)
+        .where(and(eq(ingredients.workspaceId, workspaceId), inArray(ingredients.id, [...ingIdSet])));
+      for (const r of ingRows) ingredientById.set(r.id, r);
+    }
+
+    // Accumulate per-week totals and track distinct days that had nutrition data.
+    const totalsMap = new Map<string, Nutrition & { hasData: boolean; daysWithData: Set<number> }>();
     for (const ws of weekStarts) {
-      totalsMap.set(ws, { ...emptyMacroTotal(), micronutrients: {}, hasData: false });
+      totalsMap.set(ws, { ...emptyMacroTotal(), micronutrients: {}, hasData: false, daysWithData: new Set() });
     }
 
     for (const entry of inRange) {
-      if (!entry.recipeId) continue;
       const bucket = totalsMap.get(entry.weekStartDate);
       if (!bucket) continue;
-      const perServing = perServingByRecipe.get(entry.recipeId);
-      if (!perServing) continue;
-      bucket.calories += perServing.calories;
-      bucket.proteinG += perServing.proteinG;
-      bucket.carbsG += perServing.carbsG;
-      bucket.fatG += perServing.fatG;
-      bucket.fiberG += perServing.fiberG;
-      bucket.hasData = true;
+
+      if (entry.ingredientId) {
+        const ing = ingredientById.get(entry.ingredientId);
+        if (!ing) continue;
+        const line: NutritionLine = {
+          quantity: Number(entry.ingredientQuantity ?? 0),
+          unitCode: entry.ingredientUnitCode ?? 'g',
+          ingredient: {
+            id: ing.id,
+            referenceGrams: Number(ing.referenceGrams),
+            gramEquivalents: ing.unitGramEquivalents,
+            gramWeightPerQty: ing.gramWeightPerQty === null ? null : Number(ing.gramWeightPerQty),
+            nutrition: toEngineNutrition(ing),
+            absentMacros: absentMacrosOf(ing),
+          },
+        };
+        const n = computeRecipeNutrition([line], 1).total;
+        bucket.calories += n.calories;
+        bucket.proteinG += n.proteinG;
+        bucket.carbsG += n.carbsG;
+        bucket.fatG += n.fatG;
+        bucket.fiberG += n.fiberG;
+        bucket.hasData = true;
+        bucket.daysWithData.add(entry.dayOfWeek);
+      } else if (entry.recipeId) {
+        const perServing = perServingByRecipe.get(entry.recipeId);
+        if (!perServing) continue;
+        bucket.calories += perServing.calories;
+        bucket.proteinG += perServing.proteinG;
+        bucket.carbsG += perServing.carbsG;
+        bucket.fatG += perServing.fatG;
+        bucket.fiberG += perServing.fiberG;
+        bucket.hasData = true;
+        bucket.daysWithData.add(entry.dayOfWeek);
+      }
     }
 
+    // Divide totals by days with data to produce per-day averages.
     const result = weekStarts.map((ws) => {
       const raw = totalsMap.get(ws)!;
-      const rounded = formatNutrition(raw);
+      const divisor = Math.max(1, raw.daysWithData.size);
+      const avg: Nutrition = {
+        calories: raw.calories / divisor,
+        proteinG: raw.proteinG / divisor,
+        carbsG: raw.carbsG / divisor,
+        fatG: raw.fatG / divisor,
+        fiberG: raw.fiberG / divisor,
+        micronutrients: {},
+      };
+      const rounded = formatNutrition(avg);
       return {
         weekStartDate: ws,
         calories: rounded.calories,
