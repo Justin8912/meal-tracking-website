@@ -784,7 +784,6 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
     // One query for all plan entries across the full date range.
     const inRange = await db
       .select({
-        id: planEntries.id,
         weekStartDate: planEntries.weekStartDate,
         dayOfWeek: planEntries.dayOfWeek,
         recipeId: planEntries.recipeId,
