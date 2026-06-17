@@ -6,21 +6,20 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from 'recharts';
 import { shiftWeek, useNutritionHistory, useDailyNutrition } from '../query/plans.js';
 
 /**
- * NutritionTrends — macro intake over time via a Recharts line chart.
+ * NutritionTrends — macro intake over time as a Recharts line chart.
  *
- * Two granularities:
- *   - 2 months (default): 8 weekly data points, each point = that week's totals
+ * Granularities:
+ *   - 2 months (default): 8 weekly data points, each = per-day average for that week
  *   - 1 week: 7 daily data points from the existing daily-summary endpoint
  *
- * Legend click isolates a single nutrient; clicking it again restores all.
- * Y-axis domain is computed dynamically with 15% headroom above the max
- * visible value, snapped to a "nice" step size.
+ * Each macro has a toggle chip. Clicking hides/shows it independently —
+ * any combination can be visible at once (at least one is always shown).
+ * Y-axis domain adjusts to visible series only with 15% headroom.
  */
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -28,30 +27,23 @@ import { shiftWeek, useNutritionHistory, useDailyNutrition } from '../query/plan
 type MacroKey = 'calories' | 'proteinG' | 'carbsG' | 'fatG' | 'fiberG';
 
 const MACROS: { key: MacroKey; label: string; color: string; unit: string }[] = [
-  { key: 'calories', label: 'Calories',  color: '#d29922', unit: 'kcal' },
-  { key: 'proteinG', label: 'Protein',   color: '#e07b39', unit: 'g' },
-  { key: 'carbsG',   label: 'Carbs',     color: '#58a6ff', unit: 'g' },
-  { key: 'fatG',     label: 'Fat',       color: '#bc8cff', unit: 'g' },
-  { key: 'fiberG',   label: 'Fiber',     color: '#3fb950', unit: 'g' },
+  { key: 'calories', label: 'Calories', color: '#c8902a', unit: 'kcal' },
+  { key: 'proteinG', label: 'Protein',  color: '#c0622a', unit: 'g'    },
+  { key: 'carbsG',   label: 'Carbs',    color: '#4a90d9', unit: 'g'    },
+  { key: 'fatG',     label: 'Fat',      color: '#8a6cb5', unit: 'g'    },
+  { key: 'fiberG',   label: 'Fiber',    color: '#4a9e5c', unit: 'g'    },
 ];
 
-// Day labels for the 1-week view (Monday-start to match the rest of main).
-const DAY_ABBR = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Returns the Monday of the current UTC week as YYYY-MM-DD. */
-function mondayOf(from: Date): string {
+function sundayOf(from: Date): string {
   const d = new Date(Date.UTC(from.getFullYear(), from.getMonth(), from.getDate()));
-  const dow = d.getUTCDay();
-  d.setUTCDate(d.getUTCDate() - ((dow + 6) % 7));
+  d.setUTCDate(d.getUTCDate() - d.getUTCDay());
   return d.toISOString().slice(0, 10);
 }
 
-/**
- * Compute a "nice" Y-axis ceiling with ~15% headroom.
- * Snaps up to the nearest step size that fits the magnitude.
- */
 function niceMax(maxValue: number): number {
   if (maxValue <= 0) return 100;
   const withHeadroom = maxValue * 1.15;
@@ -62,7 +54,6 @@ function niceMax(maxValue: number): number {
   return Math.ceil(withHeadroom / step) * step;
 }
 
-/** Short label for a week start date: "Jun 1" */
 function weekLabel(isoDate: string): string {
   const d = new Date(`${isoDate}T00:00:00.000Z`);
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -74,18 +65,31 @@ function weekLabel(isoDate: string): string {
 type Granularity = '2month' | '1week';
 
 export function NutritionTrends(): JSX.Element {
-  const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
+  const [weekStart, setWeekStart] = useState(() => sundayOf(new Date()));
   const [granularity, setGranularity] = useState<Granularity>('2month');
-  const [isolated, setIsolated] = useState<MacroKey | null>(null);
+  // hidden = set of macro keys turned OFF. Empty set = all visible.
+  const [hidden, setHidden] = useState<Set<MacroKey>>(new Set());
 
   const historyQuery = useNutritionHistory(weekStart, 8);
   const dailyQuery   = useDailyNutrition(weekStart);
 
-  // Transform server data into the flat objects Recharts expects.
+  function toggleMacro(key: MacroKey): void {
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        // Keep at least one visible at all times.
+        if (next.size < MACROS.length - 1) next.add(key);
+      }
+      return next;
+    });
+  }
+
   const chartData = useMemo(() => {
     if (granularity === '2month') {
       return (historyQuery.data ?? []).map((w) => ({
-        label: weekLabel(w.weekStartDate),
+        label:    weekLabel(w.weekStartDate),
         calories: w.calories,
         proteinG: w.proteinG,
         carbsG:   w.carbsG,
@@ -94,7 +98,6 @@ export function NutritionTrends(): JSX.Element {
         hasData:  w.hasData,
       }));
     }
-    // 1-week: dailyQuery returns 7 objects ordered by dayOfWeek (0=Mon).
     return (dailyQuery.data ?? []).map((d) => ({
       label:    DAY_ABBR[d.dayOfWeek] ?? String(d.dayOfWeek),
       calories: d.calories,
@@ -106,14 +109,25 @@ export function NutritionTrends(): JSX.Element {
     }));
   }, [granularity, historyQuery.data, dailyQuery.data]);
 
-  // Dynamic Y-axis ceiling based on visible (non-isolated) series.
   const yMax = useMemo(() => {
-    const activeKeys = isolated ? [isolated] : MACROS.map((m) => m.key);
+    const visibleKeys = MACROS.filter((m) => !hidden.has(m.key)).map((m) => m.key);
     const allValues = chartData.flatMap((d) =>
-      activeKeys.map((k) => (d[k as keyof typeof d] as number) ?? 0),
+      visibleKeys.map((k) => (d[k as keyof typeof d] as number) ?? 0),
     );
     return niceMax(Math.max(0, ...allValues));
-  }, [chartData, isolated]);
+  }, [chartData, hidden]);
+
+  const periodLabel = useMemo(() => {
+    if (granularity === '1week') {
+      const end = new Date(`${weekStart}T00:00:00.000Z`);
+      end.setUTCDate(end.getUTCDate() + 6);
+      return `${weekLabel(weekStart)} – ${weekLabel(end.toISOString().slice(0, 10))}`;
+    }
+    const end = new Date(`${weekStart}T00:00:00.000Z`);
+    const start = new Date(end);
+    start.setUTCDate(end.getUTCDate() - 7 * 7);
+    return `${weekLabel(start.toISOString().slice(0, 10))} – ${weekLabel(weekStart)}`;
+  }, [weekStart, granularity]);
 
   const isLoading =
     granularity === '2month' ? historyQuery.isLoading : dailyQuery.isLoading;
@@ -121,152 +135,142 @@ export function NutritionTrends(): JSX.Element {
     granularity === '2month' ? historyQuery.isError : dailyQuery.isError;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function handleLegendClick(payload: any): void {
-    const key = String(payload?.dataKey ?? '') as MacroKey;
-    if (!key) return;
-    setIsolated((prev) => (prev === key ? null : key));
-  }
-
-  // Tooltip formatter: append the correct unit.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function tooltipFormatter(value: any, name: any): [string, string] {
     const macro = MACROS.find((m) => m.key === String(name));
     return [`${value as number} ${macro?.unit ?? ''}`, macro?.label ?? String(name)];
   }
 
   return (
-    <section aria-labelledby="trends-heading" className="nutrition-trends">
+    <section aria-labelledby="trends-heading" className="meal-library">
       <h1 id="trends-heading">Nutrition Trends</h1>
 
-      {/* ── Controls ─────────────────────────────────────────── */}
-      <div className="nutrition-trends__controls">
-        <div className="nutrition-trends__granularity" role="group" aria-label="Time range">
-          <button
-            type="button"
-            className={`nutrition-trends__gran-btn${granularity === '2month' ? ' nutrition-trends__gran-btn--active' : ''}`}
-            onClick={() => setGranularity('2month')}
-          >
-            2 Months
-          </button>
-          <button
-            type="button"
-            className={`nutrition-trends__gran-btn${granularity === '1week' ? ' nutrition-trends__gran-btn--active' : ''}`}
-            onClick={() => setGranularity('1week')}
-          >
-            1 Week
-          </button>
+      {/* ── Toolbar: granularity pills + period navigation ──────── */}
+      <div className="meal-library__toolbar">
+        <div className="meal-library__pills">
+          <div className="meal-library__pill-row">
+            <button
+              type="button"
+              className={`pill${granularity === '2month' ? ' pill--active' : ''}`}
+              onClick={() => setGranularity('2month')}
+            >
+              2 months
+            </button>
+            <button
+              type="button"
+              className={`pill${granularity === '1week' ? ' pill--active' : ''}`}
+              onClick={() => setGranularity('1week')}
+            >
+              1 week
+            </button>
+          </div>
         </div>
 
-        <div className="nutrition-trends__nav" aria-label="Navigate period">
-          <button
-            type="button"
-            className="week-nav__arrow"
-            aria-label="Previous period"
-            onClick={() => setWeekStart((w) => shiftWeek(w, 'prev'))}
-          >
-            <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden>
-              <polyline points="9,3 5,7 9,11" fill="none" stroke="currentColor"
-                strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-          <span className="nutrition-trends__period-label">
-            {granularity === '1week'
-              ? weekLabel(weekStart)
-              : `${weekLabel(
-                  (() => {
-                    const d = new Date(`${weekStart}T00:00:00.000Z`);
-                    d.setUTCDate(d.getUTCDate() - 7 * 7);
-                    return d.toISOString().slice(0, 10);
-                  })(),
-                )} – ${weekLabel(weekStart)}`}
-          </span>
-          <button
-            type="button"
-            className="week-nav__arrow"
-            aria-label="Next period"
-            onClick={() => setWeekStart((w) => shiftWeek(w, 'next'))}
-          >
-            <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden>
-              <polyline points="5,3 9,7 5,11" fill="none" stroke="currentColor"
-                strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
+        <div className="meal-library__toolbar-right">
+          <div className="week-nav" style={{ padding: '8px 14px' }}>
+            <button
+              type="button"
+              className="week-nav__arrow"
+              aria-label="Previous period"
+              onClick={() => setWeekStart((w) => shiftWeek(w, 'prev'))}
+            >
+              <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden>
+                <polyline points="9,3 5,7 9,11" fill="none" stroke="currentColor"
+                  strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <div className="week-nav__center">
+              <span className="week-nav__range">{periodLabel}</span>
+            </div>
+            <button
+              type="button"
+              className="week-nav__arrow"
+              aria-label="Next period"
+              onClick={() => setWeekStart((w) => shiftWeek(w, 'next'))}
+            >
+              <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden>
+                <polyline points="5,3 9,7 5,11" fill="none" stroke="currentColor"
+                  strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
-      {isolated ? (
-        <p className="nutrition-trends__filter-note">
-          Showing {MACROS.find((m) => m.key === isolated)?.label ?? isolated} only.{' '}
-          <button
-            type="button"
-            className="nutrition-trends__filter-clear"
-            onClick={() => setIsolated(null)}
-          >
-            Show all
-          </button>
-        </p>
-      ) : (
-        <p className="nutrition-trends__filter-note">
-          Click a nutrient in the legend to isolate it.
-        </p>
-      )}
+      {/* ── Macro toggle chips ──────────────────────────────────── */}
+      <div className="trends__legend" role="group" aria-label="Toggle nutrients">
+        {MACROS.map(({ key, label, color }) => {
+          const isVisible = !hidden.has(key);
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => toggleMacro(key)}
+              aria-pressed={isVisible}
+              className="trends__legend-chip"
+              style={{
+                '--macro-color': color,
+                opacity: isVisible ? 1 : 0.3,
+              } as React.CSSProperties}
+            >
+              <span className="trends__legend-dot" aria-hidden />
+              {label}
+            </button>
+          );
+        })}
+      </div>
 
-      {/* ── Chart ────────────────────────────────────────────── */}
+      {/* ── Chart ──────────────────────────────────────────────── */}
       {isLoading ? (
-        <p role="status" className="nutrition-trends__loading">Loading nutrition data...</p>
+        <p role="status" style={{ color: 'var(--muted)', fontStyle: 'italic', padding: '40px 0' }}>
+          Loading nutrition data...
+        </p>
       ) : isError ? (
         <p role="alert">Could not load nutrition data.</p>
       ) : chartData.length === 0 || chartData.every((d) => !d.hasData) ? (
-        <p className="nutrition-trends__empty">No meals planned in this period.</p>
+        <p style={{ color: 'var(--muted)', fontStyle: 'italic', padding: '40px 0' }}>
+          No meals planned in this period.
+        </p>
       ) : (
-        <div className="nutrition-trends__chart-wrap">
+        <div style={{ marginTop: '8px' }}>
           <ResponsiveContainer width="100%" height={360}>
             <LineChart
               data={chartData}
-              margin={{ top: 8, right: 24, left: 0, bottom: 8 }}
+              margin={{ top: 8, right: 16, left: 0, bottom: 8 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #e5e5e5)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light, #e8e3da)" />
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 12, fill: 'var(--muted, #9e9689)' }}
                 tickLine={false}
                 axisLine={false}
               />
               <YAxis
                 domain={[0, yMax]}
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 12, fill: 'var(--muted, #9e9689)' }}
                 tickLine={false}
                 axisLine={false}
-                width={48}
-                tickFormatter={(v: number) => String(v)}
+                width={44}
               />
-              <Tooltip formatter={tooltipFormatter} />
-              <Legend
-                onClick={handleLegendClick}
-                wrapperStyle={{ cursor: 'pointer', paddingTop: '12px' }}
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              formatter={(value: string, _name: any, entry: any) => (
-                  <span
-                    style={{
-                      opacity: isolated && isolated !== String(entry?.dataKey ?? '') ? 0.35 : 1,
-                      fontWeight: isolated === String(entry?.dataKey ?? '') ? 600 : 400,
-                    }}
-                  >
-                    {value}
-                  </span>
-                )}
+              <Tooltip
+                formatter={tooltipFormatter}
+                contentStyle={{
+                  borderRadius: '8px',
+                  border: '1px solid var(--border, #e0d9ce)',
+                  background: 'var(--card, #fff)',
+                  fontSize: '13px',
+                  fontFamily: 'var(--font-body)',
+                }}
               />
-              {MACROS.map(({ key, label, color }) => (
+              {MACROS.map(({ key, color }) => (
                 <Line
                   key={key}
                   type="monotone"
                   dataKey={key}
-                  name={label}
                   stroke={color}
-                  strokeWidth={isolated === key ? 2.5 : 1.8}
-                  dot={{ r: 3, fill: color }}
+                  strokeWidth={1.8}
+                  dot={{ r: 3, fill: color, strokeWidth: 0 }}
                   activeDot={{ r: 5 }}
-                  hide={isolated !== null && isolated !== key}
+                  hide={hidden.has(key)}
                   connectNulls
                 />
               ))}
@@ -274,6 +278,38 @@ export function NutritionTrends(): JSX.Element {
           </ResponsiveContainer>
         </div>
       )}
+
+      <style>{`
+        .trends__legend {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin: 4px 0 16px;
+        }
+        .trends__legend-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 5px 14px 5px 10px;
+          border-radius: 24px;
+          border: 1.5px solid var(--macro-color);
+          background: transparent;
+          font-size: 12px;
+          font-weight: 500;
+          color: var(--macro-color);
+          cursor: pointer;
+          transition: opacity 0.15s;
+          font-family: var(--font-body, inherit);
+        }
+        .trends__legend-chip:hover { opacity: 0.65 !important; }
+        .trends__legend-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: var(--macro-color);
+          flex-shrink: 0;
+        }
+      `}</style>
     </section>
   );
 }
