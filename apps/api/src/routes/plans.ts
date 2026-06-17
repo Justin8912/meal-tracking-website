@@ -64,7 +64,6 @@ export function normalizeToMonday(isoDate: string): string {
 function toPlanEntry(
   row: PlanEntryRow,
   recipeName?: string | null,
-  ingredientName?: string | null,
 ): PlanEntry {
   return {
     id: row.id,
@@ -77,10 +76,6 @@ function toPlanEntry(
     freeformTitle: row.freeformTitle,
     freeformDescription: row.freeformDescription,
     freeformLink: row.freeformLink,
-    ingredientId: (row as { ingredientId?: string | null }).ingredientId ?? null,
-    ingredientName: ingredientName ?? undefined,
-    ingredientQuantity: null,
-    ingredientUnitCode: null,
   };
 }
 
@@ -669,9 +664,6 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
         id: planEntries.id,
         weekStartDate: planEntries.weekStartDate,
         recipeId: planEntries.recipeId,
-        ingredientId: planEntries.ingredientId,
-        ingredientQuantity: planEntries.ingredientQuantity,
-        ingredientUnitCode: planEntries.ingredientUnitCode,
       })
       .from(planEntries)
       .where(
@@ -736,63 +728,24 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
       }
     }
 
-    // Batch-load ingredient rows for ingredient-backed entries.
-    const ingIdSet = new Set(
-      inRange.map((e) => e.ingredientId).filter(Boolean) as string[],
-    );
-    const ingredientById = new Map<string, IngredientRow>();
-    if (ingIdSet.size > 0) {
-      const ingRows = await db
-        .select()
-        .from(ingredients)
-        .where(
-          and(eq(ingredients.workspaceId, workspaceId), inArray(ingredients.id, [...ingIdSet])),
-        );
-      for (const r of ingRows) ingredientById.set(r.id, r);
-    }
-
-    // Accumulate per-week totals.
+    // Accumulate per-week totals (recipe-backed entries only on this branch).
     const totalsMap = new Map<string, Nutrition & { hasData: boolean }>();
     for (const ws of weekStarts) {
       totalsMap.set(ws, { ...emptyMacroTotal(), micronutrients: {}, hasData: false });
     }
 
     for (const entry of inRange) {
+      if (!entry.recipeId) continue;
       const bucket = totalsMap.get(entry.weekStartDate);
       if (!bucket) continue;
-
-      if (entry.ingredientId) {
-        const ing = ingredientById.get(entry.ingredientId);
-        if (!ing) continue;
-        const line: NutritionLine = {
-          quantity: Number(entry.ingredientQuantity ?? 0),
-          unitCode: entry.ingredientUnitCode ?? 'g',
-          ingredient: {
-            id: ing.id,
-            referenceGrams: Number(ing.referenceGrams),
-            gramEquivalents: ing.unitGramEquivalents,
-            gramWeightPerQty: ing.gramWeightPerQty === null ? null : Number(ing.gramWeightPerQty),
-            nutrition: toEngineNutrition(ing),
-            absentMacros: absentMacrosOf(ing),
-          },
-        };
-        const n = computeRecipeNutrition([line], 1).total;
-        bucket.calories += n.calories;
-        bucket.proteinG += n.proteinG;
-        bucket.carbsG += n.carbsG;
-        bucket.fatG += n.fatG;
-        bucket.fiberG += n.fiberG;
-        bucket.hasData = true;
-      } else if (entry.recipeId) {
-        const perServing = perServingByRecipe.get(entry.recipeId);
-        if (!perServing) continue;
-        bucket.calories += perServing.calories;
-        bucket.proteinG += perServing.proteinG;
-        bucket.carbsG += perServing.carbsG;
-        bucket.fatG += perServing.fatG;
-        bucket.fiberG += perServing.fiberG;
-        bucket.hasData = true;
-      }
+      const perServing = perServingByRecipe.get(entry.recipeId);
+      if (!perServing) continue;
+      bucket.calories += perServing.calories;
+      bucket.proteinG += perServing.proteinG;
+      bucket.carbsG += perServing.carbsG;
+      bucket.fatG += perServing.fatG;
+      bucket.fiberG += perServing.fiberG;
+      bucket.hasData = true;
     }
 
     const result = weekStarts.map((ws) => {
