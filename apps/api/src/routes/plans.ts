@@ -769,7 +769,7 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
     }
 
     const { weekStart, weeks } = parsed.data;
-    const anchor = normalizeToMonday(weekStart);
+    const anchor = normalizeToSunday(weekStart);
     const workspaceId = await resolveWorkspaceId(db);
 
     // Build the ordered list of weekStartDate strings (oldest → newest).
