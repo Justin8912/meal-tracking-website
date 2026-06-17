@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, lte } from 'drizzle-orm';
 import { z } from 'zod';
 import { planEntryInputSchema, weeklySummarySchema } from '@meal-tracking/shared';
 import type { Micronutrient, PlanEntry, WeeklySummary } from '@meal-tracking/shared';
@@ -64,21 +64,23 @@ export function normalizeToMonday(isoDate: string): string {
 function toPlanEntry(
   row: PlanEntryRow,
   recipeName?: string | null,
+  ingredientName?: string | null,
 ): PlanEntry {
   return {
     id: row.id,
-    // The `date` column comes back as a YYYY-MM-DD string from pg.
     weekStartDate: row.weekStartDate,
     dayOfWeek: row.dayOfWeek,
     mealSlot: row.mealSlot,
     position: row.position,
     recipeId: row.recipeId,
-    // recipeName is a convenience field so the UI can display the recipe title
-    // without a separate GET /recipes/:id fetch for every plan entry.
     recipeName: recipeName ?? undefined,
     freeformTitle: row.freeformTitle,
     freeformDescription: row.freeformDescription,
     freeformLink: row.freeformLink,
+    ingredientId: (row as { ingredientId?: string | null }).ingredientId ?? null,
+    ingredientName: ingredientName ?? undefined,
+    ingredientQuantity: null,
+    ingredientUnitCode: null,
   };
 }
 
@@ -624,5 +626,189 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
     return reply.code(200).send(
       rows.map((r) => toPlanEntry(r.entry, r.recipeName)),
     );
+  });
+
+  // GET /plans/history?weekStart=YYYY-MM-DD&weeks=N
+  // Returns N weekly macro totals (oldest → newest) ending at weekStart.
+  // Single batch query across the full date range — never N round-trips.
+  app.get('/plans/history', async (request, reply) => {
+    const parsed = z
+      .object({
+        weekStart: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, 'weekStart must be YYYY-MM-DD'),
+        weeks: z.coerce.number().int().min(1).max(52).default(8),
+      })
+      .safeParse(request.query);
+
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: parsed.error.issues[0]?.message ?? 'Invalid query parameters',
+        },
+      });
+    }
+
+    const { weekStart, weeks } = parsed.data;
+    const anchor = normalizeToMonday(weekStart);
+    const workspaceId = await resolveWorkspaceId(db);
+
+    // Build the ordered list of weekStartDate strings (oldest → newest).
+    const weekStarts: string[] = [];
+    for (let i = weeks - 1; i >= 0; i--) {
+      const d = new Date(`${anchor}T00:00:00.000Z`);
+      d.setUTCDate(d.getUTCDate() - i * 7);
+      weekStarts.push(d.toISOString().slice(0, 10));
+    }
+    const oldestWeek = weekStarts[0]!;
+
+    // One query for all plan entries across the full date range.
+    const inRange = await db
+      .select({
+        id: planEntries.id,
+        weekStartDate: planEntries.weekStartDate,
+        recipeId: planEntries.recipeId,
+        ingredientId: planEntries.ingredientId,
+        ingredientQuantity: planEntries.ingredientQuantity,
+        ingredientUnitCode: planEntries.ingredientUnitCode,
+      })
+      .from(planEntries)
+      .where(
+        and(
+          eq(planEntries.workspaceId, workspaceId),
+          gte(planEntries.weekStartDate, oldestWeek),
+          lte(planEntries.weekStartDate, anchor),
+        ),
+      );
+
+    // Batch-load per-serving nutrition for all referenced recipes.
+    const recipeIdSet = new Set(
+      inRange.map((e) => e.recipeId).filter(Boolean) as string[],
+    );
+    const perServingByRecipe = new Map<string, Nutrition>();
+
+    if (recipeIdSet.size > 0) {
+      const recipeIds = [...recipeIdSet];
+      const recipeRows = await db
+        .select({ id: recipes.id, servings: recipes.servings })
+        .from(recipes)
+        .where(and(eq(recipes.workspaceId, workspaceId), inArray(recipes.id, recipeIds)));
+      const servingsByRecipe = new Map(recipeRows.map((r) => [r.id, r.servings]));
+
+      const usageRows = await db
+        .select({
+          recipeId: recipeIngredients.recipeId,
+          quantity: recipeIngredients.quantity,
+          unitCode: recipeIngredients.unitCode,
+          ingredient: ingredients,
+        })
+        .from(recipeIngredients)
+        .innerJoin(ingredients, eq(recipeIngredients.ingredientId, ingredients.id))
+        .where(inArray(recipeIngredients.recipeId, recipeIds))
+        .orderBy(asc(recipeIngredients.position));
+
+      const linesByRecipe = new Map<string, NutritionLine[]>();
+      for (const row of usageRows) {
+        const list = linesByRecipe.get(row.recipeId) ?? [];
+        list.push({
+          quantity: Number(row.quantity),
+          unitCode: row.unitCode,
+          ingredient: {
+            id: row.ingredient.id,
+            referenceGrams: Number(row.ingredient.referenceGrams),
+            gramEquivalents: row.ingredient.unitGramEquivalents,
+            gramWeightPerQty:
+              row.ingredient.gramWeightPerQty === null
+                ? null
+                : Number(row.ingredient.gramWeightPerQty),
+            nutrition: toEngineNutrition(row.ingredient),
+            absentMacros: absentMacrosOf(row.ingredient),
+          },
+        });
+        linesByRecipe.set(row.recipeId, list);
+      }
+
+      for (const rid of recipeIds) {
+        const lines = linesByRecipe.get(rid) ?? [];
+        const servings = servingsByRecipe.get(rid) ?? 1;
+        perServingByRecipe.set(rid, computeRecipeNutrition(lines, servings).perServing);
+      }
+    }
+
+    // Batch-load ingredient rows for ingredient-backed entries.
+    const ingIdSet = new Set(
+      inRange.map((e) => e.ingredientId).filter(Boolean) as string[],
+    );
+    const ingredientById = new Map<string, IngredientRow>();
+    if (ingIdSet.size > 0) {
+      const ingRows = await db
+        .select()
+        .from(ingredients)
+        .where(
+          and(eq(ingredients.workspaceId, workspaceId), inArray(ingredients.id, [...ingIdSet])),
+        );
+      for (const r of ingRows) ingredientById.set(r.id, r);
+    }
+
+    // Accumulate per-week totals.
+    const totalsMap = new Map<string, Nutrition & { hasData: boolean }>();
+    for (const ws of weekStarts) {
+      totalsMap.set(ws, { ...emptyMacroTotal(), micronutrients: {}, hasData: false });
+    }
+
+    for (const entry of inRange) {
+      const bucket = totalsMap.get(entry.weekStartDate);
+      if (!bucket) continue;
+
+      if (entry.ingredientId) {
+        const ing = ingredientById.get(entry.ingredientId);
+        if (!ing) continue;
+        const line: NutritionLine = {
+          quantity: Number(entry.ingredientQuantity ?? 0),
+          unitCode: entry.ingredientUnitCode ?? 'g',
+          ingredient: {
+            id: ing.id,
+            referenceGrams: Number(ing.referenceGrams),
+            gramEquivalents: ing.unitGramEquivalents,
+            gramWeightPerQty: ing.gramWeightPerQty === null ? null : Number(ing.gramWeightPerQty),
+            nutrition: toEngineNutrition(ing),
+            absentMacros: absentMacrosOf(ing),
+          },
+        };
+        const n = computeRecipeNutrition([line], 1).total;
+        bucket.calories += n.calories;
+        bucket.proteinG += n.proteinG;
+        bucket.carbsG += n.carbsG;
+        bucket.fatG += n.fatG;
+        bucket.fiberG += n.fiberG;
+        bucket.hasData = true;
+      } else if (entry.recipeId) {
+        const perServing = perServingByRecipe.get(entry.recipeId);
+        if (!perServing) continue;
+        bucket.calories += perServing.calories;
+        bucket.proteinG += perServing.proteinG;
+        bucket.carbsG += perServing.carbsG;
+        bucket.fatG += perServing.fatG;
+        bucket.fiberG += perServing.fiberG;
+        bucket.hasData = true;
+      }
+    }
+
+    const result = weekStarts.map((ws) => {
+      const raw = totalsMap.get(ws)!;
+      const rounded = formatNutrition(raw);
+      return {
+        weekStartDate: ws,
+        calories: rounded.calories,
+        proteinG: rounded.proteinG,
+        carbsG: rounded.carbsG,
+        fatG: rounded.fatG,
+        fiberG: rounded.fiberG,
+        hasData: raw.hasData,
+      };
+    });
+
+    return reply.code(200).send(result);
   });
 }
