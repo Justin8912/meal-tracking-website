@@ -187,6 +187,36 @@ export function useSavePlanEntry(): UseMutationResult<
   });
 }
 
+/** One week's macro totals as returned by GET /plans/history. */
+export interface WeeklyHistory {
+  weekStartDate: string;
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  fiberG: number;
+  hasData: boolean;
+}
+
+async function fetchNutritionHistory(
+  weekStart: string,
+  weeks: number,
+): Promise<WeeklyHistory[]> {
+  const params = new URLSearchParams({ weekStart, weeks: String(weeks) });
+  return apiFetch<WeeklyHistory[]>(`/api/v1/plans/history?${params.toString()}`);
+}
+
+/** Query hook for N weeks of macro history ending at weekStart (oldest → newest). */
+export function useNutritionHistory(
+  weekStart: string,
+  weeks: number,
+): UseQueryResult<WeeklyHistory[], Error> {
+  return useQuery({
+    queryKey: ['plan-history', weekStart, weeks] as const,
+    queryFn: () => fetchNutritionHistory(weekStart, weeks),
+  });
+}
+
 /** Remove a plan entry via DELETE /plans/:id. */
 async function deletePlanEntry(planEntryId: string): Promise<void> {
   await apiFetch<void>(`/api/v1/plans/${planEntryId}`, { method: 'DELETE' });

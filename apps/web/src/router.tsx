@@ -6,6 +6,7 @@ import {
 } from 'react-router-dom';
 import { MealLibrary } from './views/MealLibrary.js';
 import { WeeklyPlanner } from './views/WeeklyPlanner.js';
+import { NutritionTrends } from './views/NutritionTrends.js';
 import { IngredientLibrary } from './views/IngredientLibrary.js';
 import { useRecipes } from './query/recipes.js';
 
@@ -64,6 +65,9 @@ function AppLayout(): JSX.Element {
             <NavLink to="/planner" className={tabClass}>
               Weekly Planner
             </NavLink>
+            <NavLink to="/trends" className={tabClass}>
+              Trends
+            </NavLink>
           </nav>
         </div>
       </header>
@@ -85,6 +89,7 @@ export const router = createBrowserRouter([
       { path: 'library', element: <MealLibrary /> },
       { path: 'ingredients', element: <IngredientLibrary /> },
       { path: 'planner', element: <WeeklyPlanner /> },
+      { path: 'trends', element: <NutritionTrends /> },
     ],
   },
 ]);
