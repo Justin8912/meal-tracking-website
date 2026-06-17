@@ -22,9 +22,9 @@ const EMPTY_DAILY = Array.from({ length: 7 }, (_, i) => ({ dayOfWeek: i, hasData
 
 function weekEntries(): PlanEntry[] {
   return [
-    { id: RECIPE_ENTRY_ID, weekStartDate: WEEK, dayOfWeek: 0, mealSlot: 'breakfast', position: 0, recipeId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', recipeName: 'Oatmeal Bowl', freeformTitle: null, freeformDescription: null, freeformLink: null },
-    { id: FREEFORM_ENTRY_ID, weekStartDate: WEEK, dayOfWeek: 1, mealSlot: 'lunch', position: 0, recipeId: null, freeformTitle: 'Leftover Pizza', freeformDescription: null, freeformLink: null },
-    { id: TOMBSTONE_ENTRY_ID, weekStartDate: WEEK, dayOfWeek: 2, mealSlot: 'dinner', position: 0, recipeId: null, freeformTitle: null, freeformDescription: null, freeformLink: null },
+    { id: RECIPE_ENTRY_ID, weekStartDate: WEEK, dayOfWeek: 0, mealSlot: 'breakfast', position: 0, recipeId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', recipeName: 'Oatmeal Bowl', freeformTitle: null, freeformDescription: null, freeformLink: null, ingredientId: null, ingredientQuantity: null, ingredientUnitCode: null },
+    { id: FREEFORM_ENTRY_ID, weekStartDate: WEEK, dayOfWeek: 1, mealSlot: 'lunch', position: 0, recipeId: null, freeformTitle: 'Leftover Pizza', freeformDescription: null, freeformLink: null, ingredientId: null, ingredientQuantity: null, ingredientUnitCode: null },
+    { id: TOMBSTONE_ENTRY_ID, weekStartDate: WEEK, dayOfWeek: 2, mealSlot: 'dinner', position: 0, recipeId: null, freeformTitle: null, freeformDescription: null, freeformLink: null, ingredientId: null, ingredientQuantity: null, ingredientUnitCode: null },
   ];
 }
 

@@ -21,6 +21,8 @@ import { planEntryInputSchema } from '@meal-tracking/shared';
 import { ApiError } from '../api/client.js';
 import { useSavePlanEntry } from '../query/plans.js';
 import { RecipePalette } from './RecipePalette.js';
+import { IngredientPicker } from './IngredientPicker.js';
+import type { EditorIngredientLine } from './RecipeEditor.js';
 
 /**
  * WeekGrid (FR-4, AD-5, STEP-20) — the drag/tap-to-assign edit surface.
@@ -38,13 +40,13 @@ import { RecipePalette } from './RecipePalette.js';
  */
 
 const DAY_LABELS = [
+  'Sunday',
   'Monday',
   'Tuesday',
   'Wednesday',
   'Thursday',
   'Friday',
   'Saturday',
-  'Sunday',
 ] as const;
 
 const MEAL_SLOTS: MealSlot[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -84,11 +86,86 @@ function parseSlotDroppableId(
   return { dayOfWeek: Number(match[1]), slot: match[2] as MealSlot };
 }
 
-/** Display label for a single plan entry (recipe name, freeform title, or tombstone). */
+/** A configured ingredient ready to drag onto the planner grid. */
+interface ConfiguredIngredient {
+  localId: string;
+  ingredientId: string;
+  name: string;
+  quantity: number;
+  unitCode: string;
+}
+
+/** Union of the two draggable item types carried in dnd-kit drag data. */
+type DragItemData =
+  | { type: 'recipe'; recipeId: string }
+  | { type: 'ingredient'; item: ConfiguredIngredient };
+
+/** Active tap/keyboard selection — either a palette recipe or a configured ingredient. */
+type Selection =
+  | { type: 'recipe'; recipeId: string }
+  | { type: 'ingredient'; item: ConfiguredIngredient }
+  | null;
+
+/** Display label for a single plan entry (recipe, ingredient, freeform, or tombstone). */
 function entryLabel(entry: PlanEntry): string {
+  if (entry.ingredientId) {
+    const name = entry.ingredientName ?? 'Ingredient';
+    const qty = entry.ingredientQuantity;
+    const unit = entry.ingredientUnitCode;
+    return qty != null ? `${name} (${qty}${unit})` : name;
+  }
   if (entry.freeformTitle) return entry.freeformTitle;
   if (entry.recipeId) return entry.recipeName ?? 'Recipe';
   return 'Recipe removed';
+}
+
+let ingredientLocalIdCounter = 0;
+
+/**
+ * Ingredient palette panel: IngredientPicker at top to search and configure
+ * an ingredient + quantity, then a list of configured items that can be
+ * dragged to any day/slot (matching the recipe editor's ingredient workflow).
+ */
+function IngredientPalettePanel({
+  renderIngredientCard,
+}: {
+  renderIngredientCard: (item: ConfiguredIngredient) => JSX.Element;
+}): JSX.Element {
+  const [configured, setConfigured] = useState<ConfiguredIngredient[]>([]);
+
+  function handleAdd(line: Omit<EditorIngredientLine, 'key'>): void {
+    ingredientLocalIdCounter += 1;
+    setConfigured((prev) => [
+      ...prev,
+      {
+        localId: String(ingredientLocalIdCounter),
+        ingredientId: line.ingredientId,
+        name: line.name,
+        quantity: line.quantity,
+        unitCode: line.unitCode,
+      },
+    ]);
+  }
+
+  return (
+    <div className="weekly-planner__ingredient-palette">
+      <IngredientPicker onAdd={handleAdd} />
+      {configured.length > 0 ? (
+        <>
+          <p className="weekly-planner__ingredient-palette-hint">
+            Drag or tap an item below to add it to the plan
+          </p>
+          <ul aria-label="Configured ingredients" className="weekly-planner__palette-list">
+            {configured.map((item) => (
+              <li key={item.localId}>
+                {renderIngredientCard(item)}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </div>
+  );
 }
 
 /**
@@ -122,6 +199,42 @@ function DraggableRecipeCard({
       onClick={onSelect}
     >
       <span>{recipe.name}</span> <span>({recipe.mealType})</span>
+    </button>
+  );
+}
+
+/**
+ * A configured ingredient item rendered as a dnd-kit draggable AND a
+ * tap-to-select button, identical pattern to DraggableRecipeCard.
+ */
+function DraggableIngredientCard({
+  item,
+  selected,
+  onSelect,
+}: {
+  item: ConfiguredIngredient;
+  selected: boolean;
+  onSelect: () => void;
+}): JSX.Element {
+  const data: DragItemData = { type: 'ingredient', item };
+  const { attributes, listeners, setNodeRef } = useDraggable({
+    id: `ingredient-${item.localId}`,
+    data,
+  });
+
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      {...listeners}
+      {...attributes}
+      aria-pressed={selected}
+      onClick={onSelect}
+    >
+      <span>{item.name}</span>{' '}
+      <span className="recipe-row__kcal-badge">
+        {item.quantity}{item.unitCode}
+      </span>
     </button>
   );
 }
@@ -186,44 +299,57 @@ export interface WeekGridProps {
 }
 
 export function WeekGrid({ weekStart, byDay }: WeekGridProps): JSX.Element {
-  // The tap-to-assign selection: the recipe id picked by a tap, awaiting a
-  // day/slot tap to place it (AC-4.4). Null when nothing is selected.
-  const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<Selection>(null);
+  const [paletteTab, setPaletteTab] = useState<'recipes' | 'ingredients'>('recipes');
   const save = useSavePlanEntry();
-  // Hooks must be called unconditionally and in a stable order, so the two
-  // sensors are created explicitly rather than mapped over PLANNER_SENSORS
-  // (which exists for the structural test). They carry the same config.
   const pointerSensor = useSensor(PointerSensor, {
     activationConstraint: POINTER_ACTIVATION,
   });
   const keyboardSensor = useSensor(KeyboardSensor);
   const sensors = useSensors(pointerSensor, keyboardSensor);
 
-  // A single assignment entry point shared by drag-drop, keyboard-drop, and
-  // tap-to-assign: build a recipe-only PlanEntryInput (XOR, S-1) for the target
-  // day/slot and POST it via the week-keyed mutation (AC-4.3, AD-4).
-  function assign(recipeId: string, dayOfWeek: number, slot: MealSlot): void {
-    const candidate: PlanEntryInput = {
+  function assignRecipe(recipeId: string, dayOfWeek: number, slot: MealSlot): void {
+    const input: PlanEntryInput = { weekStart, dayOfWeek, mealSlot: slot, recipeId };
+    const parsed = planEntryInputSchema.safeParse(input);
+    if (!parsed.success) return;
+    save.mutate({ input: parsed.data });
+    setSelection(null);
+  }
+
+  function assignIngredient(
+    item: ConfiguredIngredient,
+    dayOfWeek: number,
+    slot: MealSlot,
+  ): void {
+    const input: PlanEntryInput = {
       weekStart,
       dayOfWeek,
       mealSlot: slot,
-      recipeId,
+      ingredientId: item.ingredientId,
+      ingredientQuantity: item.quantity,
+      ingredientUnitCode: item.unitCode,
     };
-    const parsed = planEntryInputSchema.safeParse(candidate);
+    const parsed = planEntryInputSchema.safeParse(input);
     if (!parsed.success) return;
     save.mutate({ input: parsed.data });
-    setSelectedRecipeId(null);
+    // Keep ingredient selected so the user can drop it into multiple slots.
   }
 
   function handleDragEnd(event: DragEndEvent): void {
-    const recipeId = event.active.data.current?.recipeId as string | undefined;
+    const data = event.active.data.current as DragItemData | undefined;
     const overId = event.over?.id;
-    if (!recipeId || overId == null) return;
+    if (!data || overId == null) return;
     const target = parseSlotDroppableId(String(overId));
     if (!target) return;
-    assign(recipeId, target.dayOfWeek, target.slot);
+
+    if (data.type === 'recipe') {
+      assignRecipe(data.recipeId, target.dayOfWeek, target.slot);
+    } else {
+      assignIngredient(data.item, target.dayOfWeek, target.slot);
+    }
   }
 
+  const hasSelection = selection !== null;
   const saveErrorMessage =
     save.error instanceof ApiError
       ? save.error.message
@@ -242,26 +368,109 @@ export function WeekGrid({ weekStart, byDay }: WeekGridProps): JSX.Element {
             grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr);
           }
         }
+        .weekly-planner__palette-tabs {
+          display: flex;
+          gap: 0;
+          border-bottom: 1px solid var(--border);
+          margin-bottom: 12px;
+        }
+        .weekly-planner__palette-tab {
+          flex: 1;
+          padding: 7px 12px;
+          background: none;
+          border: none;
+          border-bottom: 2px solid transparent;
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--muted);
+        }
+        .weekly-planner__palette-tab[aria-selected="true"] {
+          color: var(--text, #1a1a1a);
+          border-bottom-color: currentColor;
+        }
+        .weekly-planner__ingredient-palette {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .weekly-planner__ingredient-palette-hint {
+          font-size: 12px;
+          color: var(--muted);
+          margin: 0;
+        }
       `}</style>
       <div className="weekly-planner__edit-layout">
-        <RecipePalette
-          renderCard={(recipe) => (
-            <DraggableRecipeCard
-              recipe={recipe}
-              selected={selectedRecipeId === recipe.id}
-              onSelect={() =>
-                setSelectedRecipeId((id) =>
-                  id === recipe.id ? null : recipe.id,
-                )
-              }
+        <aside aria-label="Palette" className="weekly-planner__palette">
+          <div className="weekly-planner__palette-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={paletteTab === 'recipes'}
+              className="weekly-planner__palette-tab"
+              onClick={() => { setPaletteTab('recipes'); setSelection(null); }}
+            >
+              Recipes
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={paletteTab === 'ingredients'}
+              className="weekly-planner__palette-tab"
+              onClick={() => { setPaletteTab('ingredients'); setSelection(null); }}
+            >
+              Ingredients
+            </button>
+          </div>
+
+          {paletteTab === 'recipes' ? (
+            <RecipePalette
+              renderCard={(recipe) => (
+                <DraggableRecipeCard
+                  recipe={recipe}
+                  selected={
+                    selection?.type === 'recipe' &&
+                    selection.recipeId === recipe.id
+                  }
+                  onSelect={() =>
+                    setSelection((s) =>
+                      s?.type === 'recipe' && s.recipeId === recipe.id
+                        ? null
+                        : { type: 'recipe', recipeId: recipe.id },
+                    )
+                  }
+                />
+              )}
+            />
+          ) : (
+            <IngredientPalettePanel
+              renderIngredientCard={(item) => (
+                <DraggableIngredientCard
+                  item={item}
+                  selected={
+                    selection?.type === 'ingredient' &&
+                    selection.item.localId === item.localId
+                  }
+                  onSelect={() =>
+                    setSelection((s) =>
+                      s?.type === 'ingredient' &&
+                      s.item.localId === item.localId
+                        ? null
+                        : { type: 'ingredient', item },
+                    )
+                  }
+                />
+              )}
             />
           )}
-        />
+        </aside>
 
         <div>
-          {selectedRecipeId ? (
+          {selection ? (
             <p role="status">
-              Recipe selected. Tap a day and slot to assign it.
+              {selection.type === 'recipe'
+                ? 'Recipe selected — tap a day and slot to assign it.'
+                : `${selection.item.name} (${selection.item.quantity}${selection.item.unitCode}) selected — tap a slot to assign.`}
             </p>
           ) : null}
           {saveErrorMessage ? (
@@ -281,11 +490,15 @@ export function WeekGrid({ weekStart, byDay }: WeekGridProps): JSX.Element {
                         dayOfWeek={dayOfWeek}
                         slot={slot}
                         entries={entries}
-                        hasSelection={selectedRecipeId !== null}
-                        onTapAssign={() =>
-                          selectedRecipeId &&
-                          assign(selectedRecipeId, dayOfWeek, slot)
-                        }
+                        hasSelection={hasSelection}
+                        onTapAssign={() => {
+                          if (!selection) return;
+                          if (selection.type === 'recipe') {
+                            assignRecipe(selection.recipeId, dayOfWeek, slot);
+                          } else {
+                            assignIngredient(selection.item, dayOfWeek, slot);
+                          }
+                        }}
                       />
                     ))}
                   </ul>

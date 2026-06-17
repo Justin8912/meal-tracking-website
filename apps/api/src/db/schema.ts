@@ -84,6 +84,7 @@ export const ingredients = pgTable(
       .notNull()
       .default({}),
     preferredUnit: text('preferred_unit').notNull().default('g'),
+    notes: text('notes'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -233,6 +234,12 @@ export const planEntries = pgTable(
     freeformTitle: text('freeform_title'),
     freeformDescription: text('freeform_description'),
     freeformLink: text('freeform_link'),
+    // Ingredient-backed entry (alternative to recipe or freeform).
+    ingredientId: uuid('ingredient_id').references(() => ingredients.id, {
+      onDelete: 'set null',
+    }),
+    ingredientQuantity: numeric('ingredient_quantity'),
+    ingredientUnitCode: text('ingredient_unit_code').references(() => units.code),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

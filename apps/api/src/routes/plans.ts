@@ -43,20 +43,18 @@ const planQuerySchema = z.object({
 });
 
 /**
- * Normalize any YYYY-MM-DD date to the Monday DATE of its week (AD-2, S-4).
+ * Normalize any YYYY-MM-DD date to the Sunday DATE of its week (AD-2, S-4).
  *
  * The date is parsed at UTC midnight so the computation is timezone-independent
  * (a DATE has no time/zone); JS getUTCDay() returns 0 (Sunday)..6 (Saturday),
- * which we remap to an offset back to Monday. The result is re-serialized as
- * YYYY-MM-DD. This never produces a YYYY-Www string, so the prototype's
- * year-boundary bug (F-11) cannot occur.
+ * which maps directly to the days-since-Sunday offset. The result is
+ * re-serialized as YYYY-MM-DD. This never produces a YYYY-Www string, so the
+ * prototype's year-boundary bug (F-11) cannot occur.
  */
-export function normalizeToMonday(isoDate: string): string {
+export function normalizeToSunday(isoDate: string): string {
   const d = new Date(`${isoDate}T00:00:00.000Z`);
-  const dow = d.getUTCDay(); // 0=Sunday..6=Saturday
-  // Days to subtract to reach Monday: Sunday(0) -> 6, Monday(1) -> 0, etc.
-  const daysSinceMonday = (dow + 6) % 7;
-  d.setUTCDate(d.getUTCDate() - daysSinceMonday);
+  const dow = d.getUTCDay(); // 0=Sunday..6=Saturday — offset is already days since Sunday
+  d.setUTCDate(d.getUTCDate() - dow);
   return d.toISOString().slice(0, 10);
 }
 
@@ -64,6 +62,7 @@ export function normalizeToMonday(isoDate: string): string {
 function toPlanEntry(
   row: PlanEntryRow,
   recipeName?: string | null,
+  ingredientName?: string | null,
 ): PlanEntry {
   return {
     id: row.id,
@@ -76,6 +75,13 @@ function toPlanEntry(
     freeformTitle: row.freeformTitle,
     freeformDescription: row.freeformDescription,
     freeformLink: row.freeformLink,
+    ingredientId: row.ingredientId ?? null,
+    ingredientName: ingredientName ?? undefined,
+    ingredientQuantity:
+      row.ingredientQuantity === null || row.ingredientQuantity === undefined
+        ? null
+        : Number(row.ingredientQuantity),
+    ingredientUnitCode: row.ingredientUnitCode ?? null,
   };
 }
 
@@ -146,7 +152,13 @@ async function computeWeeklySummary(
   weekStartDate: string,
 ): Promise<WeeklySummary> {
   const entries = await db
-    .select({ id: planEntries.id, recipeId: planEntries.recipeId })
+    .select({
+      id: planEntries.id,
+      recipeId: planEntries.recipeId,
+      ingredientId: planEntries.ingredientId,
+      ingredientQuantity: planEntries.ingredientQuantity,
+      ingredientUnitCode: planEntries.ingredientUnitCode,
+    })
     .from(planEntries)
     .where(
       and(
@@ -159,11 +171,24 @@ async function computeWeeklySummary(
   const countedEntryIds: string[] = [];
   const excludedEntryIds: string[] = [];
   const recipeIdByEntry: Array<{ entryId: string; recipeId: string }> = [];
+  const ingredientEntries: Array<{
+    entryId: string;
+    ingredientId: string;
+    quantity: number;
+    unitCode: string;
+  }> = [];
 
   for (const entry of entries) {
-    if (entry.recipeId === null) {
-      // Freeform meal OR a recipe tombstone (recipe deleted -> recipe_id NULL):
-      // no nutrition data; flag as excluded, never zero-count (AC-5.2).
+    if (entry.ingredientId !== null && entry.ingredientId !== undefined) {
+      countedEntryIds.push(entry.id);
+      ingredientEntries.push({
+        entryId: entry.id,
+        ingredientId: entry.ingredientId,
+        quantity: Number(entry.ingredientQuantity ?? 0),
+        unitCode: entry.ingredientUnitCode ?? 'g',
+      });
+    } else if (entry.recipeId === null) {
+      // Freeform meal OR recipe tombstone: no nutrition, flag as excluded.
       excludedEntryIds.push(entry.id);
     } else {
       countedEntryIds.push(entry.id);
@@ -255,6 +280,47 @@ async function computeWeeklySummary(
     }
   }
 
+  // Ingredient-backed entries: compute nutrition directly from the ingredient row.
+  if (ingredientEntries.length > 0) {
+    const ingredientIds = Array.from(
+      new Set(ingredientEntries.map((e) => e.ingredientId)),
+    );
+    const ingredientRows = await db
+      .select()
+      .from(ingredients)
+      .where(
+        and(
+          eq(ingredients.workspaceId, workspaceId),
+          inArray(ingredients.id, ingredientIds),
+        ),
+      );
+    const ingredientById = new Map(ingredientRows.map((r) => [r.id, r]));
+
+    for (const entry of ingredientEntries) {
+      const ing = ingredientById.get(entry.ingredientId);
+      if (!ing) continue;
+      const line: NutritionLine = {
+        quantity: entry.quantity,
+        unitCode: entry.unitCode,
+        ingredient: {
+          id: ing.id,
+          referenceGrams: Number(ing.referenceGrams),
+          gramEquivalents: ing.unitGramEquivalents,
+          gramWeightPerQty:
+            ing.gramWeightPerQty === null ? null : Number(ing.gramWeightPerQty),
+          nutrition: toEngineNutrition(ing),
+          absentMacros: absentMacrosOf(ing),
+        },
+      };
+      const nutrition = computeRecipeNutrition([line], 1).total;
+      total.calories += nutrition.calories;
+      total.proteinG += nutrition.proteinG;
+      total.carbsG += nutrition.carbsG;
+      total.fatG += nutrition.fatG;
+      total.fiberG += nutrition.fiberG;
+    }
+  }
+
   // Round ONCE at the boundary (S-5); drop the micronutrient map - macros only.
   const rounded = formatNutrition(total);
   return {
@@ -287,7 +353,7 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
     const input = parsed.data;
     const workspaceId = await resolveWorkspaceId(db);
     // Derive the Monday server-side from whatever in-week date was sent (AD-2).
-    const weekStartDate = normalizeToMonday(input.weekStart);
+    const weekStartDate = normalizeToSunday(input.weekStart);
 
     let createdId: string;
     try {
@@ -303,6 +369,12 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
           freeformTitle: input.freeformTitle ?? null,
           freeformDescription: input.freeformDescription ?? null,
           freeformLink: input.freeformLink ?? null,
+          ingredientId: input.ingredientId ?? null,
+          ingredientQuantity:
+            input.ingredientQuantity !== undefined
+              ? String(input.ingredientQuantity)
+              : null,
+          ingredientUnitCode: input.ingredientUnitCode ?? null,
         })
         .returning({ id: planEntries.id });
       const id = inserted[0]?.id;
@@ -365,11 +437,11 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
     }
 
     // Derive the Monday server-side from whatever in-week date was sent (AD-2).
-    const weekStartDate = normalizeToMonday(input.weekStart);
+    const weekStartDate = normalizeToSunday(input.weekStart);
 
     try {
-      // The XOR guarantees exactly one of recipeId/freeformTitle is set; fully
-      // replace both sides so an edit that switches kind clears the other.
+      // Exactly one of recipeId/freeformTitle/ingredientId is set; fully replace
+      // all three sides so switching type clears the others.
       const updated = await db
         .update(planEntries)
         .set({
@@ -381,6 +453,12 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
           freeformTitle: input.freeformTitle ?? null,
           freeformDescription: input.freeformDescription ?? null,
           freeformLink: input.freeformLink ?? null,
+          ingredientId: input.ingredientId ?? null,
+          ingredientQuantity:
+            input.ingredientQuantity !== undefined
+              ? String(input.ingredientQuantity)
+              : null,
+          ingredientUnitCode: input.ingredientUnitCode ?? null,
           updatedAt: new Date(),
         })
         .where(
@@ -453,7 +531,7 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
 
     const workspaceId = await resolveWorkspaceId(db);
     // Normalize to the Monday so any in-week date returns the right week (AD-2).
-    const weekStartDate = normalizeToMonday(parsedQuery.data.weekStart);
+    const weekStartDate = normalizeToSunday(parsedQuery.data.weekStart);
 
     const summary = await computeWeeklySummary(db, workspaceId, weekStartDate);
     // Validate the response against the shared schema before sending (S-1).
@@ -476,15 +554,18 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
     }
 
     const workspaceId = await resolveWorkspaceId(db);
-    const weekStartDate = normalizeToMonday(parsedQuery.data.weekStart);
+    const weekStartDate = normalizeToSunday(parsedQuery.data.weekStart);
 
-    // Fetch all entries for the week (same shape as the summary query).
+    // Fetch all entries for the week including ingredient fields.
     const entries = await db
       .select({
         id: planEntries.id,
         dayOfWeek: planEntries.dayOfWeek,
         recipeId: planEntries.recipeId,
         freeformTitle: planEntries.freeformTitle,
+        ingredientId: planEntries.ingredientId,
+        ingredientQuantity: planEntries.ingredientQuantity,
+        ingredientUnitCode: planEntries.ingredientUnitCode,
       })
       .from(planEntries)
       .where(
@@ -548,23 +629,66 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
       }
     }
 
+    // Fetch ingredient rows needed for ingredient-backed entries.
+    const ingredientIdSet = new Set<string>();
+    for (const e of entries) {
+      if (e.ingredientId) ingredientIdSet.add(e.ingredientId);
+    }
+    const ingredientById = new Map<string, IngredientRow>();
+    if (ingredientIdSet.size > 0) {
+      const ingRows = await db
+        .select()
+        .from(ingredients)
+        .where(
+          and(
+            eq(ingredients.workspaceId, workspaceId),
+            inArray(ingredients.id, [...ingredientIdSet]),
+          ),
+        );
+      for (const r of ingRows) ingredientById.set(r.id, r);
+    }
+
     // Accumulate per-day totals (unrounded), then round once at the boundary.
     const dayTotals: Array<Nutrition & { dayOfWeek: number; hasData: boolean }> = [];
     for (let d = 0; d < 7; d++) {
       dayTotals.push({ ...emptyMacroTotal(), micronutrients: {}, dayOfWeek: d, hasData: false });
     }
     for (const entry of entries) {
-      if (!entry.recipeId) continue;
-      const perServing = perServingByRecipe.get(entry.recipeId);
-      if (!perServing) continue;
       const day = dayTotals[entry.dayOfWeek];
       if (!day) continue;
-      day.calories += perServing.calories;
-      day.proteinG += perServing.proteinG;
-      day.carbsG += perServing.carbsG;
-      day.fatG += perServing.fatG;
-      day.fiberG += perServing.fiberG;
-      day.hasData = true;
+
+      if (entry.ingredientId) {
+        const ing = ingredientById.get(entry.ingredientId);
+        if (!ing) continue;
+        const line: NutritionLine = {
+          quantity: Number(entry.ingredientQuantity ?? 0),
+          unitCode: entry.ingredientUnitCode ?? 'g',
+          ingredient: {
+            id: ing.id,
+            referenceGrams: Number(ing.referenceGrams),
+            gramEquivalents: ing.unitGramEquivalents,
+            gramWeightPerQty: ing.gramWeightPerQty === null ? null : Number(ing.gramWeightPerQty),
+            nutrition: toEngineNutrition(ing),
+            absentMacros: absentMacrosOf(ing),
+          },
+        };
+        const n = computeRecipeNutrition([line], 1).total;
+        day.calories += n.calories;
+        day.proteinG += n.proteinG;
+        day.carbsG += n.carbsG;
+        day.fatG += n.fatG;
+        day.fiberG += n.fiberG;
+        day.hasData = true;
+      } else if (entry.recipeId) {
+        const perServing = perServingByRecipe.get(entry.recipeId);
+        if (!perServing) continue;
+        day.calories += perServing.calories;
+        day.proteinG += perServing.proteinG;
+        day.carbsG += perServing.carbsG;
+        day.fatG += perServing.fatG;
+        day.fiberG += perServing.fiberG;
+        day.hasData = true;
+      }
     }
 
     const result = dayTotals.map((day) => {
@@ -597,19 +721,18 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
 
     const workspaceId = await resolveWorkspaceId(db);
     // Normalize to the Monday so any in-week date returns the right week (AD-2).
-    const weekStartDate = normalizeToMonday(parsedQuery.data.weekStart);
+    const weekStartDate = normalizeToSunday(parsedQuery.data.weekStart);
 
-    // LEFT JOIN recipes so every plan entry carries the recipe's display name.
-    // A tombstone entry (recipe deleted → recipeId NULL) returns null for the
-    // name, which toPlanEntry maps to undefined (recipeName is optional on the
-    // PlanEntry type). Parameterized Drizzle query (S-4).
+    // LEFT JOIN recipes and ingredients so every plan entry carries display names.
     const rows = await db
       .select({
         entry: planEntries,
         recipeName: recipes.name,
+        ingredientName: ingredients.name,
       })
       .from(planEntries)
       .leftJoin(recipes, eq(planEntries.recipeId, recipes.id))
+      .leftJoin(ingredients, eq(planEntries.ingredientId, ingredients.id))
       .where(
         and(
           eq(planEntries.workspaceId, workspaceId),
@@ -619,7 +742,7 @@ export function registerPlansRoutes(app: FastifyInstance, db: Db): void {
       .orderBy(asc(planEntries.dayOfWeek), asc(planEntries.position));
 
     return reply.code(200).send(
-      rows.map((r) => toPlanEntry(r.entry, r.recipeName)),
+      rows.map((r) => toPlanEntry(r.entry, r.recipeName, r.ingredientName)),
     );
   });
 

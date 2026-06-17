@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./dist/server.js",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "node dev.mjs",
     "build": "npm run build -w @meal-tracking/shared && npm run build -w @meal-tracking/nutrition-engine && tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "migrate": "node dist/db/migrate.js",

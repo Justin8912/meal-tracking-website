@@ -407,6 +407,7 @@ function CustomIngredientForm({
   const [carbsG, setCarbsG] = useState('');
   const [fatG, setFatG] = useState('');
   const [fiberG, setFiberG] = useState('');
+  const [notes, setNotes] = useState('');
 
   const create = useCreateCustomIngredient();
 
@@ -454,6 +455,7 @@ function CustomIngredientForm({
         gramWeightPerQty,
         unitGramEquivalents,
         preferredUnit: servingUnit,
+        notes: notes.trim() === '' ? null : notes.trim(),
       },
       { onSuccess: onAdded },
     );
@@ -534,6 +536,17 @@ function CustomIngredientForm({
             onChange={(e) => setFiberG(e.target.value)} />
         </label>
       </div>
+
+      <label>
+        Notes (optional)
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          placeholder="e.g. brand, preparation method, source..."
+          className="ingredient-picker__notes-textarea"
+        />
+      </label>
 
       {create.error ? (
         <p role="alert">Could not create ingredient: {create.error.message}</p>
