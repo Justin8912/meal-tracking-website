@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="repo-doc-sha" content="7ba0264c6a7344951cfcb95d5dfa4a0e41f91b57">
+  <meta name="repo-doc-sha" content="27e24a59925a82a5ee2160501aba18b6da947c98">
   <title>meal-tracking-website — System Overview</title>
   <style>
     :root {
@@ -259,6 +259,8 @@
   <a href="#comp-api">API</a>
   <a href="#comp-web">Web</a>
   <a href="#comp-shared-libs">Shared Libraries</a>
+  <a href="#comp-web" style="padding-left:28px;font-size:12px">Ingredient Library</a>
+  <a href="#comp-web" style="padding-left:28px;font-size:12px">Nutrition Trends</a>
   <div class="group-label">Operations</div>
   <a href="#permissions">Permissions</a>
   <a href="#how-to-use">How to Use</a>
@@ -281,13 +283,14 @@
     <span class="badge badge-blue">TypeScript 5.7</span>
     <span class="badge badge-purple">Drizzle ORM</span>
     <span class="badge badge-blue">TanStack Query 5</span>
+    <span class="badge badge-orange">Recharts 3.8</span>
     <span class="badge badge-gray">Docker Compose</span>
     <span class="badge badge-gray">npm workspaces monorepo</span>
   </div>
   <p style="font-size:13px;color:var(--muted);">
     <a href="https://github.com/Justin8912/meal-tracking-website" target="_blank">github.com/Justin8912/meal-tracking-website</a>
     &nbsp;&middot;&nbsp;
-    Last updated: <a href="https://github.com/Justin8912/meal-tracking-website/commit/7ba0264c6a7344951cfcb95d5dfa4a0e41f91b57" target="_blank"><code>7ba0264</code></a>
+    Last updated: <a href="https://github.com/Justin8912/meal-tracking-website/commit/27e24a59925a82a5ee2160501aba18b6da947c98" target="_blank"><code>27e24a5</code></a>
   </p>
 </section>
 
@@ -535,7 +538,7 @@
     <span class="badge badge-gray">Docker</span>
   </div>
 
-  <p>REST API backend. Handles all data persistence, USDA food data proxying (with cache-aside via PostgreSQL), and serves as the single point of truth for workspace state. All application routes are prefixed <code>/api/v1</code>; the health route lives at <code>/healthz</code> without a prefix. Runs migrations automatically on startup.</p>
+  <p>REST API backend. Handles all data persistence, USDA food data proxying (with cache-aside via PostgreSQL), and serves as the single point of truth for workspace state. All application routes are prefixed <code>/api/v1</code>; the health route lives at <code>/healthz</code> without a prefix. Runs migrations automatically on startup. Recent additions include ingredient notes (free-text annotations on any ingredient, PATCH-editable), ingredient library CRUD (full create/update for custom ingredients, note editing for USDA-sourced), and a weekly history endpoint supporting the Nutrition Trends view. The weekly planner now starts on Sunday (weeks run Sun&ndash;Sat, normalized server-side from migration 0010).</p>
 
   <h3>Docker Configuration</h3>
   <table>
@@ -670,6 +673,20 @@
         <td>Both USDA-snapshotted and custom ingredients</td>
       </tr>
       <tr>
+        <td><span class="method" style="background:#2d1f4a;color:#d2a8ff">PATCH</span></td>
+        <td><code>/api/v1/ingredients/:id</code></td>
+        <td>Update notes field on any ingredient</td>
+        <td>PostgreSQL &mdash; <code>ingredients</code> (write)</td>
+        <td>Returns updated ingredient. Applicable to both USDA and custom ingredients.</td>
+      </tr>
+      <tr>
+        <td><span class="method put">PUT</span></td>
+        <td><code>/api/v1/ingredients/:id</code></td>
+        <td>Full update for custom ingredients (name, macros, notes)</td>
+        <td>PostgreSQL &mdash; <code>ingredients</code> (write)</td>
+        <td>Returns 400 for USDA-sourced ingredients. Returns updated ingredient on success.</td>
+      </tr>
+      <tr>
         <td><span class="method post">POST</span></td>
         <td><code>/api/v1/plans</code></td>
         <td>Create plan entry</td>
@@ -711,6 +728,13 @@
         <td>PostgreSQL &mdash; same as summary</td>
         <td>Query: <code>weekStart</code>. Returns 0&ndash;7 day objects: <code>{dayOfWeek, hasData, calories, proteinG, carbsG, fatG, fiberG}</code>.</td>
       </tr>
+      <tr>
+        <td><span class="method get">GET</span></td>
+        <td><code>/api/v1/plans/history</code></td>
+        <td>Weekly macro history for Nutrition Trends view</td>
+        <td>PostgreSQL &mdash; <code>planEntries</code> JOIN <code>recipes</code>, <code>recipeIngredients</code>, <code>ingredients</code></td>
+        <td>Query: <code>weekStart</code>, <code>weeks</code> (default 8). Returns N weekly macro averages (per-day average for each week) ending at <code>weekStart</code>. Used by the Nutrition Trends view.</td>
+      </tr>
     </tbody>
   </table>
 
@@ -728,6 +752,7 @@
     <span class="badge badge-gray">Vite 6.4</span>
     <span class="badge badge-gray">Nginx</span>
     <span class="badge badge-purple">dnd-kit 6.3</span>
+    <span class="badge badge-orange">Recharts 3.8</span>
     <span class="badge badge-gray">Docker</span>
   </div>
 
@@ -761,8 +786,11 @@
       <tr><td><code>/</code></td><td>Redirect</td><td>Redirects to <code>/planner</code></td></tr>
       <tr><td><code>/library</code></td><td>MealLibrary</td><td>Browse, create, edit, and soft-delete recipes. Filter by meal type, tags, and full-text search. Expandable recipe cards show full ingredient and per-serving nutrition breakdown.</td></tr>
       <tr><td><code>/planner</code></td><td>WeeklyPlanner</td><td>7-day meal grid with drag-and-drop slot assignment from a recipe palette. Shows weekly and per-day macro summaries. Recipe detail modal accessible from any planned slot.</td></tr>
+      <tr><td><code>/ingredients</code></td><td>IngredientLibrary</td><td>Browse, search, and edit all workspace ingredients (custom and USDA). Full CRUD for custom ingredients, note editing for USDA ingredients.</td></tr>
+      <tr><td><code>/trends</code></td><td>NutritionTrends</td><td>Line chart of macro intake over time. Two granularities: 8-week averages (2-month) and daily breakdown (1-week). Toggle individual macros on/off. Uses Recharts.</td></tr>
     </tbody>
   </table>
+  <p>The weekly planner now starts on Sunday &mdash; weeks run Sun&ndash;Sat (normalized server-side since migration 0010).</p>
 
   <h3>Key UI Components</h3>
   <table>
@@ -875,7 +903,7 @@
 <!-- ======================================================= DATA MODEL -->
 <section id="data-model">
   <h2>Data Model</h2>
-  <p>PostgreSQL 16. All tables live in the default schema. Managed by Drizzle Kit; migrations are in <code>apps/api/drizzle/</code> (0001&ndash;0008).</p>
+  <p>PostgreSQL 16. All tables live in the default schema. Managed by Drizzle Kit; migrations are in <code>apps/api/drizzle/</code> (0001&ndash;0012). Recent migrations: <strong>0009</strong> &mdash; ingredient notes column; <strong>0010</strong> &mdash; Sunday week start; <strong>0011</strong> &mdash; recovery for double-migration; <strong>0012</strong> &mdash; ingredient plan entries (ingredient_id, ingredient_quantity, ingredient_unit_code on plan_entries).</p>
 
   <h3>workspaces</h3>
   <table>
@@ -911,6 +939,7 @@
       <tr><td><code>unitGramEquivalents</code></td><td>JSONB</td><td><code>{ unitCode: grams }</code> density overrides per ingredient (e.g. <code>{ "cup": 240 }</code>)</td></tr>
       <tr><td><code>calories</code>, <code>proteinG</code>, <code>carbsG</code>, <code>fatG</code>, <code>fiberG</code></td><td>numeric (nullable)</td><td>Per <code>referenceGrams</code>. Null = genuinely unmeasured; <strong>never zero-filled</strong> &mdash; absent values are surfaced via the completeness descriptor.</td></tr>
       <tr><td><code>micronutrients</code></td><td>JSONB</td><td><code>{ nutrientName: { amount, unit } }</code>. Absolute mass (mg/mcg), never %DV.</td></tr>
+      <tr><td><code>notes</code></td><td>text (nullable)</td><td>Free-text annotation the user can add to any ingredient. Set at creation and editable via PATCH.</td></tr>
       <tr><td><code>preferredUnit</code></td><td>text default <code>'g'</code></td><td>Default unit shown in the ingredient picker UI</td></tr>
       <tr><td><code>created_at</code>, <code>updated_at</code></td><td>timestamp</td><td></td></tr>
     </tbody>
@@ -972,7 +1001,7 @@
     <tbody>
       <tr><td><code>id</code></td><td>UUID PK</td><td></td></tr>
       <tr><td><code>workspace_id</code></td><td>UUID FK</td><td></td></tr>
-      <tr><td><code>weekStartDate</code></td><td>DATE</td><td>Always a Monday. Normalized server-side using UTC DATE arithmetic &mdash; the client never needs to compute this.</td></tr>
+      <tr><td><code>weekStartDate</code></td><td>DATE</td><td>Always a Sunday (weeks run Sun&ndash;Sat after migration 0010). Normalized server-side using UTC DATE arithmetic &mdash; the client never needs to compute this.</td></tr>
       <tr><td><code>dayOfWeek</code></td><td>integer 0&ndash;6</td><td>0 = Monday, 6 = Sunday</td></tr>
       <tr><td><code>mealSlot</code></td><td>enum</td><td><span class="status-pill pill-green">breakfast</span> <span class="status-pill pill-green">lunch</span> <span class="status-pill pill-green">dinner</span> <span class="status-pill pill-green">snack</span></td></tr>
       <tr><td><code>position</code></td><td>integer default 0</td><td>Display ordering within a single day+slot</td></tr>
@@ -980,6 +1009,9 @@
       <tr><td><code>freeformTitle</code></td><td>text (nullable)</td><td>XOR with <code>recipeId</code> &mdash; enforced by a database CHECK constraint</td></tr>
       <tr><td><code>freeformDescription</code></td><td>text (nullable)</td><td></td></tr>
       <tr><td><code>freeformLink</code></td><td>text (nullable)</td><td>External URL for freeform entries</td></tr>
+      <tr><td><code>ingredient_id</code></td><td>UUID FK &rarr; ingredients (ON DELETE SET NULL)</td><td>Set for a single-ingredient meal entry (XOR with <code>recipe_id</code> and <code>freeform_title</code>).</td></tr>
+      <tr><td><code>ingredient_quantity</code></td><td>numeric (nullable)</td><td>Amount of the ingredient in <code>ingredient_unit_code</code> units.</td></tr>
+      <tr><td><code>ingredient_unit_code</code></td><td>text FK &rarr; units.code</td><td>Unit for the ingredient quantity.</td></tr>
       <tr><td><code>created_at</code>, <code>updated_at</code></td><td>timestamp</td><td></td></tr>
     </tbody>
   </table>
@@ -1072,7 +1104,7 @@
 </section>
 
 <footer>
-  <p>Generated from <a href="https://github.com/Justin8912/meal-tracking-website/commit/7ba0264c6a7344951cfcb95d5dfa4a0e41f91b57" target="_blank"><code>7ba0264</code></a> &nbsp;&middot;&nbsp; 2026-06-16 &nbsp;&middot;&nbsp; meal-tracking-website system overview</p>
+  <p>Generated from <a href="https://github.com/Justin8912/meal-tracking-website/commit/27e24a59925a82a5ee2160501aba18b6da947c98" target="_blank"><code>27e24a5</code></a> &nbsp;&middot;&nbsp; 2026-06-17 &nbsp;&middot;&nbsp; meal-tracking-website system overview</p>
 </footer>
 
 </div>
