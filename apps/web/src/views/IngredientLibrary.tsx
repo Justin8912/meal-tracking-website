@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 import { MacroBar } from '../components/MacroBar.js';
+import { CustomIngredientForm } from '../components/IngredientPicker.js';
 import {
   useIngredients,
   useDeleteIngredient,
@@ -367,6 +368,7 @@ function IngredientDetailPanel({
 export function IngredientLibrary(): JSX.Element {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [addFormOpen, setAddFormOpen] = useState(false);
   const debouncedSearch = useDebouncedValue(searchTerm, 200);
 
   const { data: ingredients, isLoading, isError, error } = useIngredients();
@@ -409,8 +411,22 @@ export function IngredientLibrary(): JSX.Element {
               className="meal-library__search-input"
             />
           </div>
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => { setAddFormOpen((v) => !v); setExpandedId(null); }}
+            aria-expanded={addFormOpen}
+          >
+            {addFormOpen ? 'Close' : 'Add ingredient'}
+          </button>
         </div>
       </div>
+
+      {addFormOpen ? (
+        <CustomIngredientForm
+          onAdded={() => setAddFormOpen(false)}
+        />
+      ) : null}
 
       {isLoading ? (
         <p role="status">Loading ingredients...</p>

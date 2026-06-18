@@ -394,7 +394,7 @@ export function IngredientPicker({ onAdd }: IngredientPickerProps): JSX.Element 
   );
 }
 
-function CustomIngredientForm({
+export function CustomIngredientForm({
   onAdded,
 }: {
   onAdded: (saved: SavedIngredient) => void;
