@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { PlanEntry, RecipeDetail } from '@meal-tracking/shared';
 import {
   computeRecipeNutrition,
@@ -6,6 +6,7 @@ import {
 } from '@meal-tracking/nutrition-engine';
 import type { NutritionLine } from '@meal-tracking/nutrition-engine';
 import { useRecipeDetail } from '../query/recipes.js';
+import { useDeletePlanEntry } from '../query/plans.js';
 import { MacroBar } from './MacroBar.js';
 import {
   useIngredients,
@@ -39,6 +40,8 @@ import {
 
 export interface PlannedMealDetailProps {
   entry: PlanEntry;
+  /** Called after the entry is successfully deleted, so the parent can close the panel. */
+  onDeleted?: () => void;
 }
 
 function formatQty(qty: number): string {
@@ -264,11 +267,23 @@ function IngredientMealBody({ entry }: { entry: PlanEntry }): JSX.Element {
   );
 }
 
-export function PlannedMealDetail({ entry }: PlannedMealDetailProps): JSX.Element {
+export function PlannedMealDetail({ entry, onDeleted }: PlannedMealDetailProps): JSX.Element {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deletePlanEntry = useDeletePlanEntry();
+
   // Branch on the entry shape (AD-3).
   const isFreeform = entry.freeformTitle != null;
   const isRecipe = entry.recipeId != null;
   const isIngredient = entry.ingredientId != null;
+
+  function handleDelete(): void {
+    deletePlanEntry.mutate(entry.id, {
+      onSuccess: () => {
+        setConfirmDelete(false);
+        onDeleted?.();
+      },
+    });
+  }
 
   return (
     <section
@@ -301,6 +316,42 @@ export function PlannedMealDetail({ entry }: PlannedMealDetailProps): JSX.Elemen
           Recipe removed. This meal&apos;s recipe was deleted from the library.
         </p>
       )}
+
+      <div className="recipe-row__actions" style={{ marginTop: '12px' }}>
+        {confirmDelete ? (
+          <>
+            <button
+              type="button"
+              className="btn btn--danger"
+              onClick={handleDelete}
+              disabled={deletePlanEntry.isPending}
+            >
+              {deletePlanEntry.isPending ? 'Removing...' : 'Confirm remove'}
+            </button>
+            <button
+              type="button"
+              className="btn btn--secondary"
+              onClick={() => setConfirmDelete(false)}
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="btn btn--secondary"
+            style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
+            onClick={() => setConfirmDelete(true)}
+          >
+            Remove from plan
+          </button>
+        )}
+        {deletePlanEntry.error ? (
+          <p role="alert" style={{ color: 'var(--danger)', fontSize: '13px' }}>
+            {deletePlanEntry.error.message}
+          </p>
+        ) : null}
+      </div>
     </section>
   );
 }

@@ -636,7 +636,7 @@ function PlannerGrid({
           >
             Close
           </button>
-          <PlannedMealDetail entry={viewingEntry} />
+          <PlannedMealDetail entry={viewingEntry} onDeleted={() => setViewingEntry(null)} />
         </div>
       ) : null}
     </>
@@ -716,7 +716,12 @@ function MobileDayContent({
                       >
                         {entryLabel(entry)}
                       </button>
-                      {detailOpen ? <PlannedMealDetail entry={entry} /> : null}
+                      {detailOpen ? (
+                        <PlannedMealDetail
+                          entry={entry}
+                          onDeleted={() => setOpenDetailId(null)}
+                        />
+                      ) : null}
                     </li>
                   );
                 })}
